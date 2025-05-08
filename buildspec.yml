@@ -1,0 +1,61 @@
+---
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      # Fetch Docker credentials from AWS Secrets Manager
+      - echo "Fetching Docker credentials from AWS Secrets Manager"
+      - SECRET=$(aws secretsmanager get-secret-value --secret-id docker-hub-credentials --query "SecretString" --output text)
+
+      # Extract username and password from the JSON response
+      - DOCKER_USERNAME=$(echo $SECRET | sed -n 's/.*"username":"\([^"]*\)".*/\1/p')
+      - DOCKER_PASSWORD=$(echo $SECRET | sed -n 's/.*"password":"\([^"]*\)".*/\1/p')
+
+      # Print the Docker username to the CodeBuild log
+      - echo "Docker Username $DOCKER_USERNAME"
+
+      # Log in to Docker registry
+      - echo "Logging in to Docker registry"
+      - echo "$DOCKER_PASSWORD" | docker login --username $DOCKER_USERNAME --password-stdin 
+      
+      # Fetch Docker credentials from AWS Secrets Manager
+      - echo "Fetching Docker credentials from AWS Secrets Manager"
+      - RECITER_SCORE_SECRET=$(aws secretsmanager get-secret-value --secret-id reciterscore --query "SecretString" --output text)
+      
+       # Extract username and password from the JSON response
+      - REPO_NAME=$(echo $SECRET | sed -n 's/.*"repoName":"\([^"]*\)".*/\1/p')
+      - echo "Docker Username $REPO_NAME"
+      - ACCOUNT_ID=$(echo $SECRET | sed -n 's/.*"accountId":"\([^"]*\)".*/\1/p')
+      - echo "Docker Username $ACCOUNT_ID"
+      - AWS_REGION=$(echo $SECRET | sed -n 's/.*"awsRegion":"\([^"]*\)".*/\1/p')
+      - echo "Docker Username $AWS_REGION"
+      - LAMBDA_NAME=$(echo $SECRET | sed -n 's/.*"lambdaFunctionName":"\([^"]*\)".*/\1/p')
+      - echo "Docker Username $LAMBDA_NAME"
+      
+      - echo Logging in to Amazon ECR...
+      - TAG="$CODEBUILD_BUILD_NUMBER.$(date +%Y-%m-%d.%H.%M.%S).$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
+      - echo $TAG
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - REPO_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO_NAME
+  build:
+    commands:
+      - echo Building Docker image...
+      - docker build -t $REPO_NAME .
+        docker push $REPOSITORY_URI:$TAG
+          # Log out from the Docker registry to clear credentials
+          docker logout $REPOSITORY_URI
+      - docker tag $REPO_NAME:latest $REPO_URI:$TAG
+  post_build:
+    commands:
+      - echo Pushing image to ECR...
+      - docker push $REPO_URI:$TAG
+      - echo Deploying new image to Lambda function...
+      - aws lambda update-function-code \
+          --function-name $LAMBDA_NAME \
+          --image-uri $REPO_URI \
+          --region $AWS_REGION
+      - echo Deployment complete.
+
+artifacts:
+  files: 
+    - '**/*'
