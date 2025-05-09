@@ -24,23 +24,25 @@ phases:
       
       # Extract username and password from the JSON response
       - REPO_NAME=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"repoName":"\([^"]*\)".*/\1/p')
-      - echo "Docker Username $REPO_NAME"
+      - echo "Repo Name $REPO_NAME"
       - ACCOUNT_ID=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"accountId":"\([^"]*\)".*/\1/p')
-      - echo "Docker Username $ACCOUNT_ID"
+      - echo "ACCOUNT_ID $ACCOUNT_ID"
       - AWS_REGION=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"awsRegion":"\([^"]*\)".*/\1/p')
-      - echo "Docker Username $AWS_REGION"
+      - echo "AWS_REGION $AWS_REGION"
       - LAMBDA_NAME=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"lambdaFunctionName":"\([^"]*\)".*/\1/p')
-      - echo "Docker Username $LAMBDA_NAME"
+      - echo "LAMBDA_NAME $LAMBDA_NAME"
       
       - echo Logging in to Amazon ECR...
       - TAG="$CODEBUILD_BUILD_NUMBER.$(date +%Y-%m-%d.%H.%M.%S).$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
-      - echo $TAG
+      - echo "Tag Name $TAG"
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
       - REPO_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO_NAME
+      - echo "Docker Username $REPO_URI"
   build:
     commands:
       - echo Building Docker image...
       - docker build -t $REPO_NAME .
+      - echo Pushing Docker image...
       - docker push $REPO_URI:$TAG
       # Log out from the Docker registry to clear credentials
       - docker tag $REPO_NAME:latest $REPO_URI:$TAG
