@@ -36,7 +36,7 @@ phases:
       - echo "Tag Name $TAG"
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
       - REPO_URI=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO_NAME
-      - echo "Docker Username $REPO_URI"
+      - echo "REPO_URI $REPO_URI"
   build:
     commands:
       - echo Building Docker image...
@@ -52,7 +52,7 @@ phases:
       - docker push $REPO_URI:$TAG
       - docker logout $REPO_URI
       - echo Deploying new image to Lambda function...
-      - aws lambda update-function-code --function-name $LAMBDA_NAME --image-uri $REPO_URI --region $AWS_REGION
+      - aws lambda update-function-code --function-name $LAMBDA_NAME --image-uri $REPO_URI:$TAG --region $AWS_REGION
       - echo Deployment complete.
 
 artifacts:
