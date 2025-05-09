@@ -41,14 +41,14 @@ phases:
     commands:
       - echo Building Docker image...
       - docker build -t $REPO_NAME .
-      - docker push $REPOSITORY_URI:$TAG
+      - docker push $REPO_URI:$TAG
       # Log out from the Docker registry to clear credentials
       - docker tag $REPO_NAME:latest $REPO_URI:$TAG
   post_build:
     commands:
       - echo Pushing image to ECR...
       - docker push $REPO_URI:$TAG
-      - docker logout $REPOSITORY_URI
+      - docker logout $REPO_URI
       - echo Deploying new image to Lambda function...
       - aws lambda update-function-code \
           --function-name $LAMBDA_NAME \
