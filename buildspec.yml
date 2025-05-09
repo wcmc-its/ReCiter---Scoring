@@ -44,7 +44,7 @@ phases:
       - docker push $REPOSITORY_URI:$TAG
       # Log out from the Docker registry to clear credentials
       - docker tag $REPO_NAME:latest $REPO_URI:$TAG
-    post_build:
+  post_build:
     commands:
       - echo Pushing image to ECR...
       - docker push $REPO_URI:$TAG
