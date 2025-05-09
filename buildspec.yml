@@ -26,7 +26,6 @@ phases:
       - REPO_NAME=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"repoName":"\([^"]*\)".*/\1/p')
       - echo "Repo Name $REPO_NAME"
       - ACCOUNT_ID=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"accountId":"\([^"]*\)".*/\1/p')
-      - echo "ACCOUNT_ID $ACCOUNT_ID"
       - AWS_REGION=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"awsRegion":"\([^"]*\)".*/\1/p')
       - echo "AWS_REGION $AWS_REGION"
       - LAMBDA_NAME=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"lambdaFunctionName":"\([^"]*\)".*/\1/p')
@@ -42,10 +41,11 @@ phases:
     commands:
       - echo Building Docker image...
       - docker build -t $REPO_NAME .
+      - docker tag $REPO_NAME:latest $REPO_URI:$TAG
       - echo Pushing Docker image...
       - docker push $REPO_URI:$TAG
       # Log out from the Docker registry to clear credentials
-      - docker tag $REPO_NAME:latest $REPO_URI:$TAG
+      
   post_build:
     commands:
       - echo Pushing image to ECR...
