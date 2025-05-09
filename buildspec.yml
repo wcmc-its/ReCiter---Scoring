@@ -52,10 +52,7 @@ phases:
       - docker push $REPO_URI:$TAG
       - docker logout $REPO_URI
       - echo Deploying new image to Lambda function...
-      - aws lambda update-function-code \
-          --function-name $LAMBDA_NAME \
-          --image-uri $REPO_URI \
-          --region $AWS_REGION
+      - aws lambda update-function-code --function-name $LAMBDA_NAME --image-uri $REPO_URI --region $AWS_REGION
       - echo Deployment complete.
 
 artifacts:
