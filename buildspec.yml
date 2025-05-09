@@ -22,14 +22,14 @@ phases:
       - echo "Fetching Docker credentials from AWS Secrets Manager"
       - RECITER_SCORE_SECRET=$(aws secretsmanager get-secret-value --secret-id reciterscore --query "SecretString" --output text)
       
-       # Extract username and password from the JSON response
-      - REPO_NAME=$(echo $SECRET | sed -n 's/.*"repoName":"\([^"]*\)".*/\1/p')
+      # Extract username and password from the JSON response
+      - REPO_NAME=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"repoName":"\([^"]*\)".*/\1/p')
       - echo "Docker Username $REPO_NAME"
-      - ACCOUNT_ID=$(echo $SECRET | sed -n 's/.*"accountId":"\([^"]*\)".*/\1/p')
+      - ACCOUNT_ID=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"accountId":"\([^"]*\)".*/\1/p')
       - echo "Docker Username $ACCOUNT_ID"
-      - AWS_REGION=$(echo $SECRET | sed -n 's/.*"awsRegion":"\([^"]*\)".*/\1/p')
+      - AWS_REGION=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"awsRegion":"\([^"]*\)".*/\1/p')
       - echo "Docker Username $AWS_REGION"
-      - LAMBDA_NAME=$(echo $SECRET | sed -n 's/.*"lambdaFunctionName":"\([^"]*\)".*/\1/p')
+      - LAMBDA_NAME=$(echo $RECITER_SCORE_SECRET | sed -n 's/.*"lambdaFunctionName":"\([^"]*\)".*/\1/p')
       - echo "Docker Username $LAMBDA_NAME"
       
       - echo Logging in to Amazon ECR...
@@ -41,14 +41,14 @@ phases:
     commands:
       - echo Building Docker image...
       - docker build -t $REPO_NAME .
-        docker push $REPOSITORY_URI:$TAG
-          # Log out from the Docker registry to clear credentials
-          docker logout $REPOSITORY_URI
+      - docker push $REPOSITORY_URI:$TAG
+      # Log out from the Docker registry to clear credentials
       - docker tag $REPO_NAME:latest $REPO_URI:$TAG
-  post_build:
+    post_build:
     commands:
       - echo Pushing image to ECR...
       - docker push $REPO_URI:$TAG
+      - docker logout $REPOSITORY_URI
       - echo Deploying new image to Lambda function...
       - aws lambda update-function-code \
           --function-name $LAMBDA_NAME \
