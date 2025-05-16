@@ -1,16 +1,10 @@
 import json
 import sys		  
 import pandas as pd
-#import numpy as np
-import os
+import time,os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress INFO, WARNING, and ERROR messages
-#import logging
-#logging.getLogger('absl').setLevel(logging.FATAL)
-#import tensorflow as tf
-#tf.get_logger().setLevel('FATAL')  # Only show fatal errors
 
 import joblib
-#import pymysql
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 import logging
@@ -31,9 +25,14 @@ tf.get_logger().setLevel('ERROR')  # Set TensorFlow logger to only show errors
 
 # Ignore SNIMissingWarning
 warnings.filterwarnings("ignore", category=UserWarning, message=".*SNI.*")
-# Set up logging configuration
-logging.basicConfig(filename='IdentityScore.log', level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+
+logging.basicConfig(level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/var/task/IdentityScore.log'),
+        logging.StreamHandler()
+    ]
+)
 
 logging.info("Current Working Directory: %s", os.getcwd())
 
@@ -46,12 +45,6 @@ parser.add_argument('useS3Bucket', type=str, help='Flag whether to use S3 Bucket
 # Parse the arguments
 args = parser.parse_args()
 s3 = boto3.client('s3')
-
-
-
-
-
-
 
 def upload_log_to_s3():
     try:
@@ -72,7 +65,10 @@ def upload_log_to_s3():
 def read_json_file(file_name):
     try:
         logging.info(f"Script is starting. {file_name}")
-        with open(file_name, 'r') as file:
+        file_path = os.path.join("/var/task/data", file_name)
+        while not os.path.exists(file_path):
+            time.sleep(1)
+        with open(file_path, 'r') as file:
             data = json.load(file)
             return data  # Return the loaded JSON data
     except FileNotFoundError:
@@ -124,11 +120,10 @@ def file_exists_in_s3(bucket_name, file_key):
 
 
 # Fetch data and save to 'scoring_input.json'
-#data = fetch_and_save_data()
 logging.info('coming here')
 # Check if the file exists before trying to read it
 logging.info(f"The bucket flag '{args.useS3Bucket}' exists in the bucket '{args.bucket_name}'.")
-if args.useS3Bucket == "false" and os.path.isfile(args.file_name):
+if args.useS3Bucket == "false":
     logging.info('reading the file from File folder:')
     data = read_json_file(args.file_name)
     if data is not None:
@@ -142,15 +137,6 @@ elif args.useS3Bucket == "true" and file_exists_in_s3(args.bucket_name, args.fil
 else:
     logging.info(f"Error: The file '{args.file_name}' does not exist locally and the file '{args.file_name}' does not exist in the bucket '{args.bucket_name}' and useS3Bucket is '{args.useS3Bucket}'.")
 	
-
-
-
-
-#data = read_json_file(args)
-#json_data = sys.stdin.read()
-#data = json.loads(json_data)
-#logging.info(type(data))
-#logging.info(f"data read from stdin: {data}")
 
 # Load the pre-trained model and scaler
 model = load_model('identityOnlyModel.keras')
@@ -201,13 +187,5 @@ for idx, row in df.iterrows():
 logging.info(f"script execution completed successfully: {scoring_output}")
 print(json.dumps(scoring_output))
 
-# Save the inverted scores to a CSV file
-#score_data = pd.DataFrame(scoring_output)
-#score_data.to_csv('scoringOutput.csv', index=False)
-#logging.info("Inverted scores saved to 'scoringOutput.csv'.")
-
-# Save the scoring output to JSON
-#with open('scoringOutput.json', 'w') as json_file:
- #   json.dump(scoring_output, json_file, indent=4)
-#logging.info("Scoring results saved to 'scoringOutput.json'.")
+#
 

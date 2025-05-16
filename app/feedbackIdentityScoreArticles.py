@@ -1,16 +1,10 @@
 import json
 import sys
 import pandas as pd
-#import numpy as np
-import os
+import time, os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress INFO, WARNING, and ERROR messages
-#import logging
-#logging.getLogger('absl').setLevel(logging.FATAL)
-#import tensorflow as tf
-#tf.get_logger().setLevel('FATAL')  # Only show fatal errors
 
 import joblib
-#import pymysql
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 import logging
@@ -31,9 +25,13 @@ tf.get_logger().setLevel('ERROR')  # Set TensorFlow logger to only show errors
 # Ignore SNIMissingWarning
 warnings.filterwarnings("ignore", category=UserWarning, message=".*SNI.*")
 
-# Set up logging configuration
-logging.basicConfig(filename='FeedbackIdentityScore.log', level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/tmp/FeedbackIdentityScore.log'),
+        logging.StreamHandler()
+    ]
+)
 
 logging.info("Current Working Directory: %s", os.getcwd())
 
@@ -67,7 +65,10 @@ def upload_log_to_s3():
 def read_json_file(file_name):
     try:
         logging.info(f"Script is starting. {file_name}")
-        with open(file_name, 'r') as file:
+        file_path = os.path.join("/var/task/data", file_name)
+        while not os.path.exists(file_path):
+            time.sleep(1)
+        with open(file_path, 'r') as file:
             data = json.load(file)
             return data  # Return the loaded JSON data
     except FileNotFoundError:
@@ -118,18 +119,8 @@ def file_exists_in_s3(bucket_name, file_name):
             # Raise other errors
             raise
 
-
-# Fetch data and save to 'scoring_input.json'
-#data = fetch_and_save_data()
-# Check if the file exists before trying to read it
-#exists =  file_exists_in_s3(args.bucket_name, args.file_name)
-#if exists:
-#    logging.info("File exists in S3.")
-#else:
-#    logging.info("File does not exist in S3.")
-
 logging.info(f"The bucket flag '{args.useS3Bucket}' exists in the bucket '{args.bucket_name}'.")
-if args.useS3Bucket == "false" and os.path.isfile(args.file_name):
+if args.useS3Bucket == "false":
     logging.info('reading the file from File folder:')
     data = read_json_file(args.file_name)
     if data is not None:
@@ -144,21 +135,12 @@ else:
     logging.info(f"Error: The file '{args.file_name}' does not exist locally and the file '{args.file_name}' does not exist in the bucket '{args.bucket_name}' and useS3Bucket is '{args.useS3Bucket}'.")
 
 
-#data = read_json_file(args)
-#json_data = sys.stdin.read()
-#data = json.loads(json_data)
-#logging.info(type(data))
-#logging.info(f"data read from stdin: {data}")
-#print("data:",data) 
-# Load the pre-trained model and scaler
 model = load_model('feedbackIdentityModel.keras')
 scaler = joblib.load('feedbackIdentityScaler.save')
 
 # Convert the list of dictionaries into a DataFrame
 df = pd.DataFrame(data)
 
-# Check the columns of the DataFrame
-#print("Columns in the DataFrame:", df.columns.tolist())
 
 # Prepare features and labels from the data
 df['label'] = df['userAssertion'].apply(lambda x: 1 if x == 'ACCEPTED' else 0)
@@ -189,9 +171,7 @@ X = df[feature_columns]
 features_scaled = scaler.transform(X)
 
 # Run the predictions
-#predictions = model.predict(features_scaled)
 predictions = model.predict(features_scaled, verbose=0)
-#print(predictions)
 # Prepare the output
 scoring_output = []
 for idx, row in df.iterrows():
@@ -202,17 +182,4 @@ for idx, row in df.iterrows():
 # Print the scoring output as JSON to return it to the Java process
 logging.info(f"script execution completed successfully: {scoring_output}")
 print(json.dumps(scoring_output))
-# Output predictions as JSON
-#logging.info("scoring output:"json.dumps(scoring_output))
-
-# Save the inverted scores to a CSV file
-#score_data = pd.DataFrame(scoring_output)
-#logging.info("scoring output:"json.dumps(score_data))
-#score_data.to_csv('scoringOutput.csv', index=False, encoding='utf-8')
-#logging.info("Inverted scores saved to 'scoringOutput.csv'.")
-
-# Save the scoring output to JSON
-#with open('scoringOutput.json', 'w', encoding='utf-8') as json_file:
- #   json.dump(scoring_output, json_file, ensure_ascii=False, indent=4)
-#logging.info("Scoring results saved to 'scoringOutput.json'.")
 
