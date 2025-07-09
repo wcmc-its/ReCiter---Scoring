@@ -1,12 +1,15 @@
 import subprocess
 import logging
-import os
+import os,sys
 # Set up logging configuration
 logging.basicConfig(filename='ReCiterScoring.log', level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[logging.StreamHandler(sys.stderr)])
+
 
 def lambda_handler(event, context):
    
+    #print("coming into the script")
     scriptFile = event.get('scriptFile','')
     logging.info(f"scriptFile. {scriptFile}")
     fileName = event.get('inputDataFile', '')

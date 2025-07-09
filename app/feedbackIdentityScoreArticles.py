@@ -11,6 +11,7 @@ import logging
 import argparse
 import boto3
 from botocore.exceptions import NoCredentialsError
+
 import warnings
 warnings.filterwarnings('ignore')
 try:
@@ -27,13 +28,11 @@ warnings.filterwarnings("ignore", category=UserWarning, message=".*SNI.*")
 
 logging.basicConfig(level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('/tmp/FeedbackIdentityScore.log'),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.StreamHandler(sys.stderr)]
 )
 
-logging.info("Current Working Directory: %s", os.getcwd())
+
+startTime = time.perf_counter();
 
 # Set up argument parsing
 parser = argparse.ArgumentParser(description="Read a JSON file.")
@@ -46,13 +45,15 @@ args = parser.parse_args()
 s3 = boto3.client('s3')
 
 
-def upload_log_to_s3():
+""" def upload_log_to_s3():
 
     try:
         s3 = boto3.client('s3')
         bucket_name = args.bucket_name
-        log_file = 'FeedbackIdentityScore.log'
-        
+        cwid = args.file_name.split('-')[0]
+        log_file = f'{cwid}_FeedbackIdentityScore.log'
+        s3.delete_object(Bucket=bucket_name, Key=log_file)
+        logging.info(f'Successfully deleted {log_file} from {bucket_name}')
         s3.upload_file(log_file, bucket_name, log_file)
         logging.info(f'Successfully uploaded {log_file} to {bucket_name}')
     except FileNotFoundError:
@@ -60,11 +61,11 @@ def upload_log_to_s3():
     except NoCredentialsError:
         logging.error('Credentials not available')    
     except Exception as e:
-        logging.error(f'Failed to upload {log_file} to {bucket_name}: {str(e)}')
+        logging.error(f'Failed to upload {log_file} to {bucket_name}: {str(e)}') """
     
 def read_json_file(file_name):
     try:
-        logging.info(f"Script is starting. {file_name}")
+        logging.info(f"Filename for input processing. {file_name}")
         file_path = os.path.join("/var/task/data", file_name)
         while not os.path.exists(file_path):
             time.sleep(1)
@@ -99,9 +100,9 @@ def read_file_from_s3(bucket_name, file_name):
         return None
     
     finally:
-        logging.info("Script finished")
+        logging.info("Finished reading the JSON file from S3")
         # Call the upload function with your S3 bucket name
-        upload_log_to_s3()
+        #upload_log_to_s3()
 
 def file_exists_in_s3(bucket_name, file_name):
     s3 = boto3.client('s3')
@@ -111,7 +112,7 @@ def file_exists_in_s3(bucket_name, file_name):
         # Try to retrieve metadata for the object
         s3.head_object(Bucket=bucket_name, Key=file_name)
         return True  # If no exception, the file exists
-    except ClientError as e:
+    except ClientError as e: 
         # If a 404 error is raised, the file does not exist
         if e.response['Error']['Code'] == '404':
             return False
@@ -145,6 +146,7 @@ df = pd.DataFrame(data)
 # Prepare features and labels from the data
 df['label'] = df['userAssertion'].apply(lambda x: 1 if x == 'ACCEPTED' else 0)
 
+
 # Features for prediction
 feature_columns = [
     'feedbackScoreCites', 'feedbackScoreCoAuthorName', 'feedbackScoreEmail',
@@ -161,9 +163,9 @@ feature_columns = [
 # Check which feature columns are actually present in the DataFrame
 missing_columns = [col for col in feature_columns if col not in df.columns]
 if missing_columns:
-    logging.info(f"Warning: The following columns are missing: {missing_columns}")
+    logging.warning(f"The following columns are missing: {missing_columns}")
     # Optionally, you can choose to exclude missing columns
-    feature_columns = [col for col in feature_columns if col in df.columns]
+feature_columns = [col for col in feature_columns if col in df.columns]
 
 X = df[feature_columns]
 
@@ -172,6 +174,7 @@ features_scaled = scaler.transform(X)
 
 # Run the predictions
 predictions = model.predict(features_scaled, verbose=0)
+
 # Prepare the output
 scoring_output = []
 for idx, row in df.iterrows():
@@ -181,5 +184,7 @@ for idx, row in df.iterrows():
 
 # Print the scoring output as JSON to return it to the Java process
 logging.info(f"script execution completed successfully: {scoring_output}")
+endTime = time.perf_counter()
+logging.info(f"Elapsed time: {endTime - startTime:.3f} seconds")
 print(json.dumps(scoring_output))
 
