@@ -26,10 +26,8 @@ def lambda_handler(event, context):
         logger.error(f"Exception occurred: {e}")
 
     if scriptFile.strip():
-        logging.info('coming into feedbackIdentity')
         result = subprocess.run([pythonCommandName, scriptFile,fileName,bucket_name,useS3Bucket], stdout=sys.stdout, stderr=sys.stderr, text=True)
-        logging.info(f"result {result}") 
         return {
-            "authorshiplikelihoodScores": result.stdout.strip(),
+            "message": "Script executed; logs are in CloudWatch",
             "returncode": result.returncode 
         }
