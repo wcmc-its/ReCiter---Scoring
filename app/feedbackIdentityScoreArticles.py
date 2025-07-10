@@ -26,10 +26,11 @@ tf.get_logger().setLevel('ERROR')  # Set TensorFlow logger to only show errors
 # Ignore SNIMissingWarning
 warnings.filterwarnings("ignore", category=UserWarning, message=".*SNI.*")
 
-logging.basicConfig(level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stderr)]
-)
+# Set up logging configuration
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.handlers.clear()
+logger.addHandler(logging.StreamHandler(sys.stderr))
 
 
 startTime = time.perf_counter();
@@ -44,25 +45,6 @@ parser.add_argument('useS3Bucket', type=str, help='Flag whether to use S3 Bucket
 args = parser.parse_args()
 s3 = boto3.client('s3')
 
-
-""" def upload_log_to_s3():
-
-    try:
-        s3 = boto3.client('s3')
-        bucket_name = args.bucket_name
-        cwid = args.file_name.split('-')[0]
-        log_file = f'{cwid}_FeedbackIdentityScore.log'
-        s3.delete_object(Bucket=bucket_name, Key=log_file)
-        logging.info(f'Successfully deleted {log_file} from {bucket_name}')
-        s3.upload_file(log_file, bucket_name, log_file)
-        logging.info(f'Successfully uploaded {log_file} to {bucket_name}')
-    except FileNotFoundError:
-        logging.error(f'The file {log_file} was not found')
-    except NoCredentialsError:
-        logging.error('Credentials not available')    
-    except Exception as e:
-        logging.error(f'Failed to upload {log_file} to {bucket_name}: {str(e)}') """
-    
 def read_json_file(file_name):
     try:
         logging.info(f"Filename for input processing. {file_name}")
