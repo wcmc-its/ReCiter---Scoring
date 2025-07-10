@@ -2,11 +2,14 @@ import subprocess
 import logging
 import os,sys
 # Set up logging configuration
-logging.basicConfig(level=logging.INFO, 
+""" logging.basicConfig(level=logging.INFO, 
                     format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[logging.StreamHandler(sys.stderr)])
+                    handlers=[logging.StreamHandler(sys.stderr)]) """
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.handlers.clear()
+logger.addHandler(logging.StreamHandler(sys.stderr))
 
 def lambda_handler(event, context):
     
