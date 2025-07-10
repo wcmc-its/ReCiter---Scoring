@@ -11,6 +11,7 @@ import logging
 
 import argparse
 import boto3
+from datetime import datetime
 from botocore.exceptions import NoCredentialsError
 import warnings
 warnings.filterwarnings('ignore')
@@ -26,13 +27,14 @@ tf.get_logger().setLevel('ERROR')  # Set TensorFlow logger to only show errors
 # Ignore SNIMissingWarning
 warnings.filterwarnings("ignore", category=UserWarning, message=".*SNI.*")
 
-logging.basicConfig(level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('/var/task/IdentityScore.log'),
-        logging.StreamHandler()
-    ]
-)
+
+# Set up logging configuration
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.handlers.clear()
+logger.addHandler(logging.StreamHandler(sys.stderr))
+
+startTime = time.perf_counter();
 
 logging.info("Current Working Directory: %s", os.getcwd())
 
@@ -46,25 +48,9 @@ parser.add_argument('useS3Bucket', type=str, help='Flag whether to use S3 Bucket
 args = parser.parse_args()
 s3 = boto3.client('s3')
 
-def upload_log_to_s3():
-    try:
-        s3 = boto3.client('s3')
-        bucket_name = args.bucket_name
-        log_file = 'IdentityScore.log'
-        
-        s3.upload_file(log_file, bucket_name, log_file)
-        logging.info(f'Successfully uploaded {log_file} to {bucket_name}')
-    except FileNotFoundError:
-        logging.error(f'The file {log_file} was not found')
-    except NoCredentialsError:
-        logging.error('Credentials not available')
-    except Exception as e:
-        logging.error(f'Failed to upload {log_file} to {bucket_name}: {str(e)}')
-
-
 def read_json_file(file_name):
     try:
-        logging.info(f"Script is starting. {file_name}")
+        logging.info(f"Filename for input processing. {file_name}")
         file_path = os.path.join("/var/task/data", file_name)
         while not os.path.exists(file_path):
             time.sleep(1)
@@ -99,9 +85,9 @@ def read_file_from_s3(bucket_name, file_key):
         return None
     
     finally:
-        logging.info("ScriptIdentity finished")
+        logging.info("Finished reading the JSON file from S3")
         # Call the upload function with your S3 bucket name
-        upload_log_to_s3()
+        #upload_log_to_s3()
 
 def file_exists_in_s3(bucket_name, file_key):
     s3 = boto3.client('s3')
@@ -185,6 +171,8 @@ for idx, row in df.iterrows():
 
 # Print the scoring output as JSON to return it to the Java process
 logging.info(f"script execution completed successfully: {scoring_output}")
+endTime = time.perf_counter()
+logging.info(f"Elapsed time: {endTime - startTime:.3f} seconds")
 print(json.dumps(scoring_output))
 
 #
