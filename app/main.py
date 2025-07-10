@@ -2,7 +2,7 @@ import subprocess
 import logging
 import os,sys
 # Set up logging configuration
-logging.basicConfig(filename='ReCiterScoring.log', level=logging.INFO, 
+logging.basicConfig(level=logging.INFO, 
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     handlers=[logging.StreamHandler(sys.stderr)])
 
