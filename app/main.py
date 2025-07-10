@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 def lambda_handler(event, context):
    
-	print("stdout: test print")
-	print("stderr: test print", file=sys.stderr)
-	logging.info("Logging INFO test")
-	logging.error("Logging ERROR test")
-	os.system("echo SYSTEM call executed")
-    #print("coming into the script")
+	
     scriptFile = event.get('scriptFile','')
+    print("stdout: test print")
+    print("stderr: test print", file=sys.stderr)
+    logging.info("Logging INFO test")
+    logging.error("Logging ERROR test")
+    os.system("echo SYSTEM call executed")
     logging.info(f"scriptFile. {scriptFile}")
     fileName = event.get('inputDataFile', '')
     logging.info(f"fileName. {fileName}")
