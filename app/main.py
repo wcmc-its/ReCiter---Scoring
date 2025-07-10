@@ -22,12 +22,22 @@ def lambda_handler(event, context):
         logging.info(f"bucket_name. {bucket_name}")
         pythonCommandName = event.get('pythonCommandName','python')
         logging.info(f"pythonCommandName. {pythonCommandName}")
-    except Exception as e:
-        logger.error(f"Exception occurred: {e}")
+    
 
-    if scriptFile.strip():
-        result = subprocess.run([pythonCommandName, scriptFile,fileName,bucket_name,useS3Bucket], stdout=sys.stdout, stderr=sys.stderr, text=True)
+        if scriptFile.strip():
+            result = subprocess.run([pythonCommandName, scriptFile,fileName,bucket_name,useS3Bucket],  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            stdout = result.stdout.strip()
+            stderr = result.stderr.strip()
+            # Optional: Log stderr for debugging
+            if stderr:
+                logging.warning(f"logging information from the {scriptFile} : {stderr}")
+            return {
+                "authorshiplikelihoodScores": stdout,
+                "returncode": result.returncode 
+            }
+        
+    except Exception as e:
+        logging.error(f"Failed to run subprocess: {e}")
         return {
-            "message": "Script executed; logs are in CloudWatch",
-            "returncode": result.returncode 
+            "error": str(e)
         }
