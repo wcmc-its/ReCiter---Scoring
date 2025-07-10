@@ -27,7 +27,7 @@ def lambda_handler(event, context):
 
     if scriptFile.strip():
         logging.info('coming into feedbackIdentity')
-        result = subprocess.run([pythonCommandName, scriptFile,fileName,bucket_name,useS3Bucket],stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run([pythonCommandName, scriptFile,fileName,bucket_name,useS3Bucket], stdout=sys.stdout, stderr=sys.stderr, text=True)
         logging.info(f"result {result}") 
         return {
             "authorshiplikelihoodScores": result.stdout.strip(),
