@@ -6,9 +6,15 @@ logging.basicConfig(filename='ReCiterScoring.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     handlers=[logging.StreamHandler(sys.stderr)])
 
+logger = logging.getLogger(__name__)
 
 def lambda_handler(event, context):
    
+	print("stdout: test print")
+	print("stderr: test print", file=sys.stderr)
+	logging.info("Logging INFO test")
+	logging.error("Logging ERROR test")
+	os.system("echo SYSTEM call executed")
     #print("coming into the script")
     scriptFile = event.get('scriptFile','')
     logging.info(f"scriptFile. {scriptFile}")
