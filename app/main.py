@@ -9,23 +9,27 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 def lambda_handler(event, context):
-   
-	
-    scriptFile = event.get('scriptFile','')
-    print("stdout: test print")
-    print("stderr: test print", file=sys.stderr)
-    logging.info("Logging INFO test")
-    logging.error("Logging ERROR test")
-    os.system("echo SYSTEM call executed")
-    logging.info(f"scriptFile. {scriptFile}")
-    fileName = event.get('inputDataFile', '')
-    logging.info(f"fileName. {fileName}")
-    useS3Bucket = event.get('useS3Bucket', 'false')
-    logging.info(f"useS3Bucket. {useS3Bucket}")
-    bucket_name = event.get('bucket_name','')
-    logging.info(f"bucket_name. {bucket_name}")
-    pythonCommandName = event.get('pythonCommandName','python')
-    logging.info(f"pythonCommandName. {pythonCommandName}")
+    
+    logger.info("Function invoked")
+    try:
+        logger.info(f"event: {event}")	
+        scriptFile = event.get('scriptFile','')
+        print("stdout: test print")
+        print("stderr: test print", file=sys.stderr)
+        logging.info("Logging INFO test")
+        logging.error("Logging ERROR test")
+        os.system("echo SYSTEM call executed")
+        logging.info(f"scriptFile. {scriptFile}")
+        fileName = event.get('inputDataFile', '')
+        logging.info(f"fileName. {fileName}")
+        useS3Bucket = event.get('useS3Bucket', 'false')
+        logging.info(f"useS3Bucket. {useS3Bucket}")
+        bucket_name = event.get('bucket_name','')
+        logging.info(f"bucket_name. {bucket_name}")
+        pythonCommandName = event.get('pythonCommandName','python')
+        logging.info(f"pythonCommandName. {pythonCommandName}")
+    except Exception as e:
+        logger.error(f"Exception occurred: {e}")
 
     if scriptFile.strip():
         logging.info('coming into feedbackIdentity')
