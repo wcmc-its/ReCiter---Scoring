@@ -12,6 +12,8 @@ logger.addHandler(logging.StreamHandler(sys.stderr))
 def lambda_handler(event, context):
     
     try:
+        modelName = event.get('modelName','')
+        logging.info(f"modelName. {modelName}")
         scriptFile = event.get('scriptFile','')
         logging.info(f"scriptFile. {scriptFile}")
         fileName = event.get('inputDataFile', '')
@@ -25,7 +27,7 @@ def lambda_handler(event, context):
     
 
         if scriptFile.strip():
-            result = subprocess.run([pythonCommandName, scriptFile,fileName,bucket_name,useS3Bucket],  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            result = subprocess.run([pythonCommandName, scriptFile,modelName,fileName,bucket_name,useS3Bucket],  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             stdout = result.stdout.strip()
             stderr = result.stderr.strip()
             # Optional: Log stderr for debugging
