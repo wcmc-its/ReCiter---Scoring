@@ -291,7 +291,7 @@ elif args.modelName == "identity":
     # Make a dictionary for each row
     scoring_output = [
         {'id': article_id, 'scoreTotal': score}
-        for article_id, score in zip(df_fb['articleId'], score_io)
+        for article_id, score in zip(df_io['articleId'], score_io)
     ]
     logging.info("scoring_output:\n%s",scoring_output)
 

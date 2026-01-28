@@ -32,7 +32,7 @@ def lambda_handler(event, context):
             stderr = result.stderr.strip()
             # Optional: Log stderr for debugging
             if stderr:
-                logging.warning(f"logging information from the {scriptFile} : {stderr}")
+                logging.warning(f"logging information from the {scriptFile} : {stderr} : ")
             return {
                 "authorshiplikelihoodScores": stdout,
                 "returncode": result.returncode 
