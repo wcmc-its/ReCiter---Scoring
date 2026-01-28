@@ -32,9 +32,6 @@ from preprocessing import (
     compute_derived_features_identity_only,
 )
 
-logging.basicConfig(filename='script.log', level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')    
-logging.info("Current Working Directory: %s", os.getcwd())
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -46,7 +43,6 @@ def read_json_file(file_name):
     try:
         logging.info(f"Filename for input processing. {file_name}")
         file_path = os.path.join("/var/task/data", file_name)
-        #file_path = os.path.join("app", file_name)
         logging.info(f'file_path {file_path}')
         while not os.path.exists(file_path):
             time.sleep(1)
@@ -102,8 +98,6 @@ def file_exists_in_s3(bucket_name, file_name):
 
 def main():
     
-    
-
 	try:
 		from urllib3.exceptions import SNIMissingWarning
 	except ImportError:
@@ -112,9 +106,6 @@ def main():
 
 	# Ignore SNIMissingWarning
 	warnings.filterwarnings("ignore", category=UserWarning, message=".*SNI.*")
-
-   
-    # Set up logging configuration
     
 	# Set up logging configuration
 	logger = logging.getLogger()
@@ -146,9 +137,6 @@ s3 = boto3.client('s3')
 logging.info(f"=" * 70)
 logging.info("CART Scoring Pipeline Verification")
 logging.info(f"=" * 70)   
-# logging.info()
-# logging.info("CART Scoring Pipeline Verification")
-# logging.info("=" * 70)
 
 base_dir = Path(__file__).parent
 errors = []
@@ -174,17 +162,10 @@ except Exception as e:
     sys.exit(1)
 
 logging.info(f"The bucket flag '{args.useS3Bucket}' exists in the bucket '{args.bucket_name}'.")
-#if args.file_name == "null" or args.file_name == "" :
-#    args.file_name = args.modelName + "_input_data_" + args.cwid +".json"; 
-#    logging.info(f'file_name*********: {args.file_name}')
 if args.useS3Bucket == "false":
     logging.info('reading the file from File folder:')
     articles = read_json_file(args.file_name)
-   # logging.info(f"articles******** {articles}")
     df = pd.DataFrame(articles)
-#if articles is not None:
-#        logging.info(articles)
-#el
 if args.useS3Bucket == "true" and file_exists_in_s3(args.bucket_name, args.file_name):
     logging.info(f"The file '{args.file_name}' exists in the bucket '{args.bucket_name}'.")
     # Proceed to read the file from S3
@@ -195,47 +176,6 @@ if args.useS3Bucket == "true" and file_exists_in_s3(args.bucket_name, args.file_
     else:
         logging.info(f"Error: The file '{args.file_name}' does not exist locally and the file '{args.file_name}' does not exist in the bucket '{args.bucket_name}' and useS3Bucket is '{args.useS3Bucket}'.")
 	
-    # 2. Load sample input
-    #logging.info("\n2. Loading sample input...")
-    #try:
-    #    with open(base_dir / "sample_input_ajg9004.json") as f:
-    #        articles = json.load(f)
-    #    df = pd.DataFrame(articles)
-    #    logging.info(f"   OK - Loaded {len(df)} articles")
-    #except Exception as e:
-    #    logging.info(f"   FAIL - {e}")
-    #    sys.exit(1)
-
-    # 3. Load expected outputs
-    #logging.info("\n3. Loading expected outputs...")
-    #try:
-    #    with open(base_dir / "expected_outputs_ajg9004.json") as f:
-    #        expected = json.load(f)
-			  
-    #    logging.info(f"   OK - Loaded expected outputs for {len(expected['articles'])} articles")
-		 
-    #except Exception as e:
-    #    logging.info(f"   FAIL - {e}")
-    #    sys.exit(1)
-#expected_output_file_name = args.modelName + "_expected_output_" + args.cwid +".json"; 
-#logging.info(f'expected_output_file_name {expected_output_file_name}')
-#if args.useS3Bucket == "false":
-#    logging.info('reading the file from File folder:')
-#    expected = read_json_file(expected_output_file_name)
-#    logging.info(f"expected data {expected}")
-
-#if expected is not None:
-#    logging.info(expected)
-#elif args.useS3Bucket == "true" and file_exists_in_s3(args.bucket_name, expected_output_file_name):
-#    logging.info(f"The file '{expected_output_file_name}' exists in the bucket '{args.bucket_name}'.")
-# Proceed to read the file from S3
-#    expected = read_file_from_s3(args.bucket_name, expected_output_file_name)
-#    if expected is not None:
-#        logging.info(expected)
-#    else:
-#        logging.info(f"Error: The file '{expected_output_file_name}' does not exist locally and the file '{expected_output_file_name}' does not exist in the bucket '{args.bucket_name}' and useS3Bucket is '{args.useS3Bucket}'.")
-
-    # 4. Preprocess for Feedback+Identity
 if args.modelName == "feedback" :
     logging.info("\n4. Preprocessing for Feedback+Identity model...")
     df_fb = df.copy()
@@ -297,97 +237,6 @@ elif args.modelName == "identity":
 
 # Final output: authorshipLikelihoodScore = calibrated × 100
 logging.info("   OK - Predictions generated")
-
-# 7. Verify against expected
-#logging.info("\n7. Verifying against expected outputs...")
-#n_checked = 0
-#n_passed = 0
-
-#logging.info(f'expected["articles"]: {expected["articles"]}')
-#for i, exp_art in enumerate(expected["articles"]):
- #   n_checked += 1
-
- #   if args.modelName == "feedback" :
-    #    logging.info('inside feedback model')
-  #      exp_fb = exp_art["scores"]["feedback_identity"]["authorshipLikelihoodScore"]
-  #      diff_fb = abs(score_fb[i] - exp_fb)
-
-  #  elif args.modelName == "identity" :
-  #      logging.info('inside Identity model')
-  #      exp_io = exp_art["scores"]["identity_only"]["authorshipLikelihoodScore"]
-  #      diff_io = abs(score_io[i] - exp_io)
-
-  #  if args.modelName =="feedback" and diff_fb > TOLERANCE:
-      #  logging.info('inside feedback model1')
-   #     errors.append(
-   #         f"Article {i} (id={exp_art['articleId']}): "
-   #         f"FB expected={exp_fb:.2f}, got={score_fb[i]:.2f}, diff={diff_fb:.2f}"
-   #     )
-   # elif args.modelName =="identity" and diff_io > TOLERANCE:
-   #     logging.info('inside identity model1')
-   #     errors.append(
-   #         f"Article {i} (id={exp_art['articleId']}): "
-   #         f"IO expected={exp_io:.2f}, got={score_io[i]:.2f}, diff={diff_io:.2f}"
-   #     )
-    #else:
-    #    n_passed += 1
-
-#logging.info(f"   Checked: {n_checked} articles")
-#logging.info(f"   Passed:  {n_passed} articles")
-#logging.info(f"   Failed:  {len(errors)} articles")
-
-# 8. Summary
-#logging.info("\n" + "=" * 70)
-#if errors:
-#    logging.info("VERIFICATION FAILED")
-#    logging.info("=" * 70)
-#    logging.info("\nFirst 10 errors:")
-#    for err in errors[:10]:
-#        logging.info(f"  - {err}")
-#    if len(errors) > 10:
-#        logging.info(f"  ... and {len(errors) - 10} more errors")
-#    sys.exit(1)
-#else:
-#    logging.info("VERIFICATION PASSED")
-#    logging.info("=" * 70)
-#    logging.info("\nAll authorshipLikelihoodScore values match within tolerance.")
-#    logging.info(f"  Tolerance: ±{TOLERANCE} (0-100 scale)")
-#    logging.info(f"  Articles verified: {n_checked}")
-
-    # Show sample outputs
-#    logging.info("\nSample outputs (first 5 articles):")
-#    if args.debug:
-        # Debug mode: show all intermediate values
-                
-#        logging.info(f"{'Idx':>4} {'ArticleID':>12} {'IO_score':>9} {'IO_raw':>8} {'IO_cal':>8} "
-#                f"{'FB_score':>9} {'FB_raw':>8} {'FB_cal':>8} {'Label':<10}")
-            
-#        logging.info("-" * 95)
-#        for i in range(5):
-#            art = expected["articles"][i]
-#            logging.info(
-#                f"{i:>4} {art['articleId']:>12} "
-#                f"{score_io[i]:>9.2f} {raw_io[i]:>8.4f} {cal_io[i]:>8.4f} "
-#                f"{score_fb[i]:>9.2f} {raw_fb[i]:>8.4f} {cal_fb[i]:>8.4f} "
-#                f"{art['userAssertion']:<10}"
-#            )
-#        logging.info("\n(Use --debug to see intermediate raw/calibrated probabilities)")
-#    else:
-        # Standard mode: just show final scores
-                
-#        logging.info(f"{'Idx':>4} {'ArticleID':>12} {'IO_score':>12} {'FB_score':>12} {'Label':<10}")
-            
-#        logging.info("-" * 58)
-#        for i in range(5):
-#            art = expected["articles"][i]
-#            logging.info(
-#                f"{i:>4} {art['articleId']:>12} "
-#                f"{score_io[i]:>12.2f} {score_fb[i]:>12.2f} "
-#                f"{art['userAssertion']:<10}"
-#            )
-#        logging.info("\n(Use --debug to see intermediate raw/calibrated probabilities)")
-
-#    sys.exit(0)
 
 
 if __name__ == "__main__":
