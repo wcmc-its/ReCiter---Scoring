@@ -194,7 +194,7 @@ feature_columns = [
     'pubmedTargetAuthorInstitutionalAffiliationMatchTypeScore',
     'relationshipPositiveMatchScore', 'relationshipNegativeMatchScore',
     'relationshipIdentityCount', 'countAccepted', 'countRejected',
-    'identityStrength', 'acceptanceRateLowerBound', 'feedbackConfidence', 'uncertainRejectionRisk'
+    'acceptanceRateLowerBound', 'feedbackConfidence', 'identityStrength', 'uncertainRejectionRisk'
 ]
 
 X = df[feature_columns]
