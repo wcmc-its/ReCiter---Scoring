@@ -118,8 +118,9 @@ else:
     logging.info(f"Error: The file '{args.file_name}' does not exist locally and the file '{args.file_name}' does not exist in the bucket '{args.bucket_name}' and useS3Bucket is '{args.useS3Bucket}'.")
 
 
-model = load_model('feedbackIdentityModel.keras')
-scaler = joblib.load('feedbackIdentityScaler.save')
+model = joblib.load('feedbackIdentityModel.joblib')
+calibrator = joblib.load('feedbackIdentityCalibrator.joblib')
+scaler = joblib.load('feedbackIdentityScaler.joblib')  
 
 # Convert the list of dictionaries into a DataFrame
 df = pd.DataFrame(data)
@@ -155,13 +156,14 @@ X = df[feature_columns]
 features_scaled = scaler.transform(X)
 
 # Run the predictions
-predictions = model.predict(features_scaled, verbose=0)
+raw_probs = model.predict_proba(features_scaled)[:, 1]
+calibrated_probs = calibrator.predict(raw_probs)
 
 # Prepare the output
 scoring_output = []
 for idx, row in df.iterrows():
     id_value = row['articleId']
-    inverted_score = float(predictions[idx][0])
+    inverted_score = float(calibrated_probs[idx]) * 100
     scoring_output.append({'id': id_value, 'scoreTotal': inverted_score})
 
 # Print the scoring output as JSON to return it to the Java process
