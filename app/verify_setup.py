@@ -173,15 +173,11 @@ def main():
         # Ignore SNIMissingWarning
         warnings.filterwarnings("ignore", category=UserWarning, message=".*SNI.*")
     
-
-
-
         # Set up logging configuration
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
         logger.handlers.clear()
         logger.addHandler(logging.StreamHandler(sys.stderr))
-
 
         startTime = time.perf_counter();
     
@@ -213,9 +209,6 @@ def main():
         errors = []
         logging.info(f'base_dir: {base_dir}');       
                                                                         
-                                                                            
-                                                                        
-
         # 1. Load models
         logging.info("\n1. Loading models...")
         try:
@@ -265,9 +258,9 @@ def main():
                     if feat not in df_fb.columns:
                         df_fb[feat] = 0
                     df_fb[feat] = df_fb[feat].fillna(0)
-                logging.info("feedback columns scores*****\n%s", df_fb)    
+                #logging.info("feedback columns scores*****\n%s", df_fb)    
                 df_fb = compute_derived_features_feedback_identity(df_fb)
-                logging.info("compute_derived_features_feedback*****\n%s", df_fb)  
+                #logging.info("compute_derived_features_feedback*****\n%s", df_fb)  
                 logging.info(f"   OK - {len(FEEDBACK_IDENTITY_FEATURES)} features prepared")
 
             elif args.modelName =="identity" :
@@ -293,13 +286,13 @@ def main():
             if args.modelName =="feedback" :
                 logging.info("feedback_identity_features:\n%s",df_fb[FEEDBACK_IDENTITY_FEATURES].to_string())
                 X_fb = fb_scaler.transform(df_fb[FEEDBACK_IDENTITY_FEATURES].values)
-                logging.info("X_fb\n%s:", X_fb)
+                #logging.info("X_fb\n%s:", X_fb)
                 raw_fb = fb_model.predict_proba(X_fb)[:, 1]
-                logging.info("raw fb\n%s:", raw_fb)
+                #logging.info("raw fb\n%s:", raw_fb)
                 cal_fb = fb_cal.predict(raw_fb.reshape(-1, 1))
-                logging.info("cal fb\n%s:", cal_fb)
+                #logging.info("cal fb\n%s:", cal_fb)
                 score_fb = cal_fb * 100
-                logging.info("score_fb:\n%s",score_fb)
+                #logging.info("score_fb:\n%s",score_fb)
                 # Prepare the output
                 # Make a dictionary for each row
                 scoring_output = [
@@ -333,9 +326,6 @@ def main():
         logging.exception(f"Unexpected error in main(): {e}")
         return {"status": "error", "message": f"Unexpected failure: {e}"}
 
-
-#if __name__ == "__main__":
-#    main()
 
 if __name__ == "__main__":
     try:
