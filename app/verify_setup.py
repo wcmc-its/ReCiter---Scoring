@@ -9,12 +9,10 @@ Usage:
     python verify_setup.py --debug   # Include intermediate values for troubleshooting
 """
 
-import argparse
 import json
 import sys
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 import logging
@@ -36,12 +34,12 @@ from preprocessing import (
 warnings.filterwarnings('ignore')
 TOLERANCE = 0.1  # Acceptable difference for authorshipLikelihoodScore (0-100 scale)
 
-def read_json_file(file_name, timeout=60):
+def read_json_file(scoringDataFile, timeout=60):
     """
     Reads a JSON file from local disk with optional wait for the file to appear.
 
     Args:
-        file_name (str): Name of the file to read
+        scoringDataFile (str): Name of the file to read
         timeout (int): Maximum seconds to wait for the file
 
     Returns:
@@ -52,14 +50,18 @@ def read_json_file(file_name, timeout=60):
         json.JSONDecodeError: If the file is not valid JSON
         Exception: For any other errors during file read
     """
-    file_path = os.path.join("/var/task/data", file_name)
+    file_path = os.path.join("/var/task/data", scoringDataFile)
     logging.info(f"Preparing to read file: {file_path}")
 
     start_time = time.time()
     while not os.path.exists(file_path):
         if time.time() - start_time > timeout:
-            logging.error(f"File '{file_path}' not found after {timeout} seconds")
-            raise FileNotFoundError(f"{file_path} not found after {timeout} seconds")
+            logging.exception(f"Unexpected error reading file '{scoringDataFile}' from S3")
+            return {
+                    "predictionScores": "",
+                    "returnCode": 1,
+                    "error": f"{file_path} not found after {timeout} seconds"
+                }
         logging.info(f"Waiting for file '{file_path}' to appear...")
         time.sleep(1)
 
@@ -69,23 +71,35 @@ def read_json_file(file_name, timeout=60):
             logging.info(f"Successfully read file '{file_path}'")
             return data
     except FileNotFoundError:
-        logging.error(f"File '{file_path}' not found")
-        raise
+        logging.exception(f"Unexpected error reading file '{scoringDataFile}' from S3")
+        return {
+                "predictionScores": "",
+                "returnCode": 1,
+                "error": f"Unexpected error reading file '{scoringDataFile}' from S3"
+            }
     except json.JSONDecodeError as e:
-        logging.error(f"Invalid JSON in file '{file_path}': {e}")
-        raise
+        logging.exception(f"Unexpected error reading file '{scoringDataFile}' from S3")
+        return {
+                "predictionScores": "",
+                "returnCode": 1,
+                "error": f"Unexpected error reading file '{scoringDataFile}' from S3"
+            }
     except Exception as e:
-        logging.exception(f"Unexpected error reading file '{file_path}'")
-        raise
+        logging.exception(f"Unexpected error reading files '{file_path}' and '{scoringDataFile}' from S3")
+        return {
+            "predictionScores": "",
+            "returnCode": 1,
+            "error": f"Unexpected error reading file '{scoringDataFile}' from S3"
+        }
 
 
-def read_file_from_s3(bucket_name, file_name):
+def read_file_from_s3(bucket_name, scoringDataFile):
     """
     Reads a JSON file from S3 and returns it as a Python dictionary.
 
     Args:
         bucket_name (str): Name of the S3 bucket
-        file_name (str): Name of the file in the S3 bucket
+        scoringDataFile (str): Name of the file in the S3 bucket
 
     Returns:
         dict: Parsed JSON content
@@ -96,13 +110,13 @@ def read_file_from_s3(bucket_name, file_name):
         Exception: For other unexpected errors
     """
     s3 = boto3.client('s3')
-    logging.info(f"Attempting to read S3 file '{file_name}' from bucket '{bucket_name}'")
+    logging.info(f"Attempting to read S3 file '{scoringDataFile}' from bucket '{bucket_name}'")
 
     try:
         # Attempt to get the object from S3
-        response = s3.get_object(Bucket=bucket_name, Key=file_name)
+        response = s3.get_object(Bucket=bucket_name, Key=scoringDataFile)
         content = response['Body'].read().decode('utf-8')  # Decode bytes to string
-        logging.info(f"Successfully retrieved file '{file_name}' from S3")
+        logging.info(f"Successfully retrieved file '{scoringDataFile}' from S3")
         
         # Parse JSON content
         data = json.loads(content)
@@ -111,28 +125,44 @@ def read_file_from_s3(bucket_name, file_name):
     except ClientError as e:
         error_code = e.response['Error']['Code']
         if error_code == 'NoSuchKey':
-            logging.error(f"File '{file_name}' does not exist in bucket '{bucket_name}'")
-            raise FileNotFoundError(f"S3 file '{file_name}' not found in bucket '{bucket_name}'")
+            logging.error(f"File '{scoringDataFile}' does not exist in bucket '{bucket_name}'")
+            return {
+                "predictionScores": "",
+                "returnCode": 1,
+                "error": f"S3 file '{scoringDataFile}' not found in bucket '{bucket_name}'"
+            }
         else:
             logging.exception(f"A client error occurred while accessing S3: {e}")
-            raise
+            return {
+                "predictionScores": "",
+                "returnCode": 1,
+                "error": f"A client error occurred while accessing S3: {e}"
+            }
     except json.JSONDecodeError as e:
-        logging.error(f"Invalid JSON in file '{file_name}' from bucket '{bucket_name}': {e}")
-        raise
+        logging.error(f"Invalid JSON in file '{scoringDataFile}' from bucket '{bucket_name}': {e}")
+        return {
+                "predictionScores": "",
+                "returnCode": 1,
+                "error": f"Invalid JSON in file '{scoringDataFile}' from bucket '{bucket_name}': {e}"
+            }
     except Exception as e:
-        logging.exception(f"Unexpected error reading file '{file_name}' from S3")
-        raise
+        logging.exception(f"Unexpected error reading file '{scoringDataFile}' from S3")
+        return {
+                "predictionScores": "",
+                "returnCode": 1,
+                "error": f"Unexpected error reading file '{scoringDataFile}' from S3"
+            }
     finally:
-        logging.info(f"Finished attempting to read file '{file_name}' from S3")
+        logging.info(f"Finished attempting to read file '{scoringDataFile}' from S3")
 
 
-def file_exists_in_s3(bucket_name, file_name):
+def file_exists_in_s3(bucket_name, scoringDataFile):
     """
     Checks if a file exists in an S3 bucket.
 
     Args:
         bucket_name (str): Name of the S3 bucket
-        file_name (str): Name of the file/key to check
+        scoringDataFile (str): Name of the file/key to check
 
     Returns:
         bool: True if the file exists, False if it does not exist
@@ -141,27 +171,39 @@ def file_exists_in_s3(bucket_name, file_name):
         Exception: For unexpected errors accessing S3
     """
     s3 = boto3.client('s3')
-    logging.info(f"Checking existence of S3 file '{file_name}' in bucket '{bucket_name}'")
+    logging.info(f"Checking existence of S3 file '{scoringDataFile}' in bucket '{bucket_name}'")
 
     try:
         # Try to retrieve metadata for the object
-        s3.head_object(Bucket=bucket_name, Key=file_name)
-        logging.info(f"File '{file_name}' exists in bucket '{bucket_name}'")
+        s3.head_object(Bucket=bucket_name, Key=scoringDataFile)
+        logging.info(f"File '{scoringDataFile}' exists in bucket '{bucket_name}'")
         return True
     except ClientError as e:
         error_code = e.response['Error']['Code']
         if error_code == '404' or error_code == 'NoSuchKey':
-            logging.warning(f"File '{file_name}' does not exist in bucket '{bucket_name}'")
-            return False
+            logging.warning(f"File '{scoringDataFile}' does not exist in bucket '{bucket_name}'")
+            return {
+                    "predictionScores": "",
+                    "returnCode": 1,
+                    "error": f"File '{scoringDataFile}' does not exist in bucket '{bucket_name}'"
+                }
         else:
-            logging.exception(f"ClientError when checking file '{file_name}' in bucket '{bucket_name}': {e}")
-            raise
+            logging.exception(f"ClientError when checking file '{scoringDataFile}' in bucket '{bucket_name}': {e}")
+            return {
+                "predictionScores": "",
+                "returnCode": 1,
+                "error": str(e)
+            }
     except Exception as e:
-        logging.exception(f"Unexpected error when checking file '{file_name}' in bucket '{bucket_name}': {e}")
-        raise
+        logging.exception(f"Unexpected error when checking file '{scoringDataFile}' in bucket '{bucket_name}': {e}")
+        return {
+            "predictionScores": "",
+            "returnCode": 1,
+            "error": str(e)
+        }
 
 
-def main():
+def main(modelName,scoringDataFile,bucket_name,useS3Bucket,models):
     
     try:
         try:
@@ -181,23 +223,10 @@ def main():
 
         startTime = time.perf_counter();
     
+        logging.info("Using cached model '%s' (%s)", modelName,models["model"].__class__.__name__)
+        
         logging.info(f'executing main method {startTime}')
 
-        parser = argparse.ArgumentParser(description="Verify CART scoring pipeline")
-        parser.add_argument(
-            "--debug", action="store_true",
-                                
-            help="Show intermediate values (raw_probability, calibrated_probability) for troubleshooting"
-        )
-        # Set up argument parsing
-        parser.add_argument('modelName', type=str, help='The name of the string tells which model to load')
-        parser.add_argument('file_name', type=str, help='The name of the JSON file to read')
-        parser.add_argument('bucket_name', type=str, help='The name of the S3 bucket')
-        parser.add_argument('useS3Bucket', type=str, help='Flag whether to use S3 Bucket or not')
-
-        args = parser.parse_args()
-        logging.info(f'args {args}');
-        
         s3 = boto3.client('s3')
                     
 
@@ -209,61 +238,75 @@ def main():
         errors = []
         logging.info(f'base_dir: {base_dir}');       
                                                                         
-        # 1. Load models
-        logging.info("\n1. Loading models...")
+        # 1. Retrieve Cached models
+        logging.info(f"\n1. Retrieving models for :{modelName}")
         try:
-            if args.modelName == "feedback":
-                fb_model = joblib.load(base_dir / "feedbackIdentityModel.joblib")
-                fb_cal = joblib.load(base_dir / "feedbackIdentityCalibrator.joblib")
-                fb_scaler = joblib.load(base_dir / "feedbackIdentityScaler.joblib")
+            if modelName == "feedback":
+                fb_model = models.get("model") 
+                fb_cal = models.get("calibrator") 
+                fb_scaler = models.get("scaler") 
             else :
-                io_model = joblib.load(base_dir / "identityOnlyModel.joblib")
-                io_cal = joblib.load(base_dir / "identityOnlyCalibrator.joblib")
-                io_scaler = joblib.load(base_dir / "identityOnlyScaler.joblib")
-                logging.info("OK - All models loaded")
+                io_model = models.get("model") 
+                io_cal = models.get("calibrator") 
+                io_scaler = models.get("scaler") 
+                logging.info(f"OK -  models retrieved for {modelName}")
         except Exception as e:
-            logging.exception(f"Error loading models: {e}")
-            return {"status": "error", "message": f"Model loading failed: {e}"}
+            logging.exception(f"Error retrieving models: {e}")
+            return {
+                    "predictionScores": "",
+                    "returnCode": 1,
+                    "error": f"Model retrieval failed: {e}"
+                }
         
         # 2. Load Data
         try:
-            logging.info(f"The bucket flag '{args.useS3Bucket}' exists in the bucket '{args.bucket_name}'.")
-            if args.useS3Bucket == "false":
+            logging.info(f"The bucket flag '{useS3Bucket}' exists in the bucket '{bucket_name}'.")
+            if useS3Bucket == "false":
                 logging.info('reading the file from File folder:')
-                articles = read_json_file(args.file_name)
+                articles = read_json_file(scoringDataFile)
                 df = pd.DataFrame(articles)
-            elif args.useS3Bucket == "true" and file_exists_in_s3(args.bucket_name, args.file_name):
-                logging.info(f"The file '{args.file_name}' exists in the bucket '{args.bucket_name}'.")
+            elif useS3Bucket == "true" and file_exists_in_s3(bucket_name, scoringDataFile):
+                logging.info(f"The file '{scoringDataFile}' exists in the bucket '{bucket_name}'.")
                 # Proceed to read the file from S3
-                articles = read_file_from_s3(args.bucket_name, args.file_name)
+                articles = read_file_from_s3(bucket_name, scoringDataFile)
             else:
-                logging.warning(f"Invalid useS3Bucket flag value: {args.useS3Bucket}")
-                return {"status": "error", "message": f"Invalid useS3Bucket flag: {args.useS3Bucket}"}
+                logging.warning(f"Invalid useS3Bucket flag value: {useS3Bucket}")
+                return {
+                    "predictionScores": "",
+                    "returnCode": 1,
+                    "error": f"Invalid useS3Bucket flag: {useS3Bucket}"
+                }
 
             if not articles:
-                logging.warning(f"No data loaded from file '{args.file_name}'")
-                return {"status": "error", "message": "No data loaded from input file"}
+                logging.warning(f"No data loaded from file '{scoringDataFile}'")
+                return {
+                    "predictionScores": "",
+                    "returnCode": 1,
+                    "error": "No data loaded from scoringDataFile "
+                }
 			
             df = pd.DataFrame(articles)
         except Exception as e:
             logging.exception(f"Error loading input data: {e}")
-            return {"status": "error", "message": f"Data loading failed: {e}"}
+            return {
+                    "predictionScores": "",
+                    "returnCode": 1,
+                    "error": f"Data loading failed: {e}"
+                }
         
             # 3. Preprocessing
         try:
-            if args.modelName == "feedback" :
+            if modelName == "feedback" :
                 logging.info("\n4. Preprocessing for Feedback+Identity model...")
                 df_fb = df.copy()
                 for feat in FEEDBACK_IDENTITY_BASE_FEATURES:
                     if feat not in df_fb.columns:
                         df_fb[feat] = 0
                     df_fb[feat] = df_fb[feat].fillna(0)
-                #logging.info("feedback columns scores*****\n%s", df_fb)    
                 df_fb = compute_derived_features_feedback_identity(df_fb)
-                #logging.info("compute_derived_features_feedback*****\n%s", df_fb)  
                 logging.info(f"   OK - {len(FEEDBACK_IDENTITY_FEATURES)} features prepared")
 
-            elif args.modelName =="identity" :
+            elif modelName =="identity" :
                 logging.info("\n5. Preprocessing for Identity-Only model...")
                 df_io = df.copy()
                 for feat in IDENTITY_ONLY_BASE_FEATURES:
@@ -273,75 +316,69 @@ def main():
                 df_io = compute_derived_features_identity_only(df_io)
                 logging.info(f"   OK - {len(IDENTITY_ONLY_FEATURES)} features prepared")
             else:
-                logging.warning(f"Invalid modelName: {args.modelName}")
-                return {"status": "error", "message": f"Invalid modelName: {args.modelName}"}
+                logging.warning(f"Invalid modelName: {modelName}")
+                return {
+                    "predictionScores": "",
+                    "returnCode": 1,
+                    "error": f"Invalid modelName: {modelName}"
+                }
         
         except Exception as e:
             logging.exception(f"Error during preprocessing: {e}")
-            return {"status": "error", "message": f"Preprocessing failed: {e}"}
-            
+            return {
+                    "predictionScores": "",
+                    "returnCode": 1,
+                    "error": f"Preprocessing failed: {e}"
+                }
             # 4. Scoring
         try:    
             logging.info("\n6. Scoring articles...")
-            if args.modelName =="feedback" :
-                logging.info("feedback_identity_features:\n%s",df_fb[FEEDBACK_IDENTITY_FEATURES].to_string())
+            if modelName =="feedback" :
                 X_fb = fb_scaler.transform(df_fb[FEEDBACK_IDENTITY_FEATURES].values)
-                #logging.info("X_fb\n%s:", X_fb)
                 raw_fb = fb_model.predict_proba(X_fb)[:, 1]
-                #logging.info("raw fb\n%s:", raw_fb)
                 cal_fb = fb_cal.predict(raw_fb.reshape(-1, 1))
-                #logging.info("cal fb\n%s:", cal_fb)
                 score_fb = cal_fb * 100
-                #logging.info("score_fb:\n%s",score_fb)
                 # Prepare the output
                 # Make a dictionary for each row
                 scoring_output = [
-                    {'id': article_id, 'scoreTotal': score}
+                    {'id': int(article_id), 'scoreTotal': float(score)}
                     for article_id, score in zip(df_fb['articleId'], score_fb)
                 ]
                 logging.info("scoring_output:\n%s",scoring_output)
-                print(json.dumps(scoring_output, default=lambda o: float(o) if isinstance(o, np.floating) else str(o)))
-
-            elif args.modelName == "identity":    
+            
+            elif modelName == "identity":    
                 X_io = io_scaler.transform(df_io[IDENTITY_ONLY_FEATURES].values)
                 raw_io = io_model.predict_proba(X_io)[:, 1]
                 cal_io = io_cal.predict(raw_io)
                 score_io = cal_io * 100
-                logging.info(f'score_io {cal_io}')
-
+            
                 # Prepare the output
                 # Make a dictionary for each row
                 scoring_output = [
-                    {'id': article_id, 'scoreTotal': score}
+                    {'id': int(article_id), 'scoreTotal': float(score)}
                     for article_id, score in zip(df_io['articleId'], score_io)
                 ]
                 logging.info("scoring_output:\n%s",scoring_output)
                 logging.info("   OK - Predictions generated")
+            return {
+                    "predictionScores": scoring_output,
+                    "returnCode": 0,
+                    "error": ""
+                }
 
         except Exception as e:
             logging.exception(f"Error during scoring: {e}")
-            return {"status": "error", "message": f"Scoring failed: {e}"}
+            return {
+                    "predictionScores": "",
+                    "returnCode": 1,
+                    "error": f"Scoring failed: {e}"
+                }
     
     except Exception as e:
         logging.exception(f"Unexpected error in main(): {e}")
-        return {"status": "error", "message": f"Unexpected failure: {e}"}
-
-
-if __name__ == "__main__":
-    try:
-        main()  # Call the main function
-    except Exception as e:
-        import traceback
-        import json
-        import logging
-
-        # Log the full stack trace
-        logging.error("Unhandled exception in main():\n%s", traceback.format_exc())
-
-        # Optionally, return the error to a calling program or API
-        error_output = {
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
-        print(json.dumps(error_output))  # So a calling program can parse it
+        return {
+                    "predictionScores": "",
+                    "returnCode": 1,
+                    "error": f"Unexpected failure: {e}"
+                }
 
