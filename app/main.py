@@ -1,3 +1,5 @@
+import os
+os.environ["JOBLIB_MULTIPROCESSING"] = "0"
 import joblib
 import logging
 import sys

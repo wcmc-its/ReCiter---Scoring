@@ -266,12 +266,12 @@ def main(modelName,scoringDataFile,bucket_name,useS3Bucket,models):
         try:
             logging.info(f"The bucket flag '{useS3Bucket}' exists in the bucket '{bucket_name}'.")
             result = file_exists_in_s3(bucket_name, scoringDataFile)
-
+            logging.info(f'result from the file_exists_in_s3 :{result} {useS3Bucket}')
             if useS3Bucket == "false":
                 logging.info('reading the file from File folder:')
                 articles = read_json_file(scoringDataFile)
                 df = pd.DataFrame(articles)
-            elif useS3Bucket == "true" and result["returnCode"] != 0:
+            elif useS3Bucket == "true" and result.get("returnCode", 1) != 0:
                 logging.info(f"The file '{scoringDataFile}' exists in the bucket '{bucket_name}'.")
                 # Proceed to read the file from S3
                 articles = read_file_from_s3(bucket_name, scoringDataFile)
