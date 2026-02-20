@@ -177,7 +177,11 @@ def file_exists_in_s3(bucket_name, scoringDataFile):
         # Try to retrieve metadata for the object
         s3.head_object(Bucket=bucket_name, Key=scoringDataFile)
         logging.info(f"File '{scoringDataFile}' exists in bucket '{bucket_name}'")
-        return True
+        return {
+                    "predictionScores": "",
+                    "returnCode": 0,
+                    "error": ""
+                }
     except ClientError as e:
         error_code = e.response['Error']['Code']
         if error_code == '404' or error_code == 'NoSuchKey':
@@ -261,11 +265,13 @@ def main(modelName,scoringDataFile,bucket_name,useS3Bucket,models):
         # 2. Load Data
         try:
             logging.info(f"The bucket flag '{useS3Bucket}' exists in the bucket '{bucket_name}'.")
+            result = file_exists_in_s3(bucket_name, scoringDataFile)
+
             if useS3Bucket == "false":
                 logging.info('reading the file from File folder:')
                 articles = read_json_file(scoringDataFile)
                 df = pd.DataFrame(articles)
-            elif useS3Bucket == "true" and file_exists_in_s3(bucket_name, scoringDataFile):
+            elif useS3Bucket == "true" and result["returnCode"] != 0:
                 logging.info(f"The file '{scoringDataFile}' exists in the bucket '{bucket_name}'.")
                 # Proceed to read the file from S3
                 articles = read_file_from_s3(bucket_name, scoringDataFile)
