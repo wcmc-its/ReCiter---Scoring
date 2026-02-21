@@ -12,6 +12,10 @@ Used by: feedbackIdentityCreateModel_*.py, identityOnlyCreateModel_*.py,
 """
 
 import os
+import re
+import json
+import logging
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -25,6 +29,50 @@ from scipy import stats
 STRONG_EMAIL = float(os.getenv("STRONG_EMAIL", "0.90"))
 STRONG_ORCID = float(os.getenv("STRONG_ORCID", "0.90"))
 STRONG_AFFIL = float(os.getenv("STRONG_AFFIL", "0.95"))
+
+_log = logging.getLogger(__name__)
+
+
+# =============================================================================
+# NAME FREQUENCY DATA (loaded once at import time)
+# =============================================================================
+
+def _load_name_frequency():
+    """Load name frequency table from data/name_frequency.json.
+    Returns (table_dict, median_score) or ({}, 0.0) if unavailable."""
+    freq_path = Path(__file__).parent.parent / 'data' / 'name_frequency.json'
+    if freq_path.exists():
+        with open(freq_path, 'r') as f:
+            table = json.load(f)
+        scores = [v['score'] for v in table.values()]
+        median = sorted(scores)[len(scores) // 2] if scores else 0.0
+        _log.info(f"Loaded name frequency table: {len(table):,} names (median score={median:.4f})")
+        return table, median
+    return {}, 0.0
+
+
+_NAME_FREQ_TABLE, _NAME_FREQ_MEDIAN = _load_name_frequency()
+
+
+def _name_frequency_score(first_name):
+    """Look up IDF-like frequency score for a first name.
+
+    For compound names (e.g., "Jean-Pierre", "Sae hee"), splits into tokens,
+    discards single-char initials, and averages the scores.
+    Returns median score for unknown names or 0.0 if no frequency table loaded.
+    """
+    if not _NAME_FREQ_TABLE or not first_name or not isinstance(first_name, str):
+        return 0.0
+
+    first_name = first_name.strip().lower().replace('.', '')
+    tokens = [t for t in re.split(r'[\s\-]+', first_name) if len(t) > 1]
+
+    if not tokens:
+        return _NAME_FREQ_MEDIAN
+
+    scores = [_NAME_FREQ_TABLE[t]['score'] if t in _NAME_FREQ_TABLE else _NAME_FREQ_MEDIAN
+              for t in tokens]
+    return sum(scores) / len(scores)
 
 
 # =============================================================================
@@ -69,6 +117,7 @@ DERIVED_FEATURES_IDENTITY_SHARED = [
     'nameInstitutionInteraction',  # nameMatchFirst * bestAffiliation — name AND institution agree
     'worstSingleEvidence',         # Min of key identity features — no damning evidence against
     'nameQualityMin',              # Min of first/last/middle name scores — all name parts match
+    'firstNameFrequencyScore',     # IDF-like score: rare names → high, common names → low (person-level)
 ]
 
 # Derived features for Feedback+Identity model (uses feedback counts)
@@ -210,6 +259,14 @@ def _compute_identity_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
         df['nameMatchLastScore'],
         df['nameMatchMiddleScore']
     ])
+
+    # 6. firstNameFrequencyScore: IDF-like score from name frequency table (person-level)
+    #    Requires 'identityFirstName' column (added by Java Feature Generator).
+    #    Rare names get high scores (strong identity signal), common names get low scores.
+    if _NAME_FREQ_TABLE and 'identityFirstName' in df.columns:
+        df['firstNameFrequencyScore'] = df['identityFirstName'].map(_name_frequency_score)
+    else:
+        df['firstNameFrequencyScore'] = 0.0
 
     return df
 
