@@ -68,7 +68,7 @@ def _name_frequency_score(first_name):
     tokens = [t for t in re.split(r'[\s\-]+', first_name) if len(t) > 1]
 
     if not tokens:
-        return _NAME_FREQ_MEDIAN
+        return 0.0
 
     scores = [_NAME_FREQ_TABLE[t]['score'] if t in _NAME_FREQ_TABLE else _NAME_FREQ_MEDIAN
               for t in tokens]
