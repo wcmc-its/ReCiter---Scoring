@@ -30,6 +30,23 @@ STRONG_EMAIL = float(os.getenv("STRONG_EMAIL", "0.90"))
 STRONG_ORCID = float(os.getenv("STRONG_ORCID", "0.90"))
 STRONG_AFFIL = float(os.getenv("STRONG_AFFIL", "0.95"))
 
+# Features to clip at zero (non-negative only).
+#
+# These features have 0% negative values in ACCEPTED articles but significant
+# negative values in REJECTED articles, creating a perfect separation at zero.
+# Without clipping, the model learns a hard binary threshold: any negative
+# value → reject with maximum confidence, regardless of all other evidence.
+#
+# Clipping removes the cliff while preserving positive-value signal. The
+# absence signal is captured instead by informedAbsenceCount/Intensity.
+#
+# See informed_absence_results/CLIFF_EFFECT_ANALYSIS.md for full analysis.
+CLIP_AT_ZERO_FEATURES = [
+    'feedbackScoreCoAuthorName',     # 0.00% acc negative, 62.66% rej negative
+    'feedbackScoreYear',             # 0.00% acc negative, 17.94% rej negative
+    'feedbackScoreOrcidCoAuthor',    # 0.00% acc negative,  0.63% rej negative
+]
+
 _log = logging.getLogger(__name__)
 
 
@@ -125,7 +142,10 @@ DERIVED_FEATURES_FEEDBACK = [
     'acceptanceRateLowerBound',   # Wilson score interval LB - confidence-adjusted
     'feedbackConfidence',          # How much feedback data we have (log-scaled)
     'uncertainRejectionRisk',      # Continuous risk score for uncertain high-rejection cases
-    'feedbackDensity'              # Fraction of 12 feedback features that are non-zero
+    'feedbackDensity',             # Fraction of 12 feedback features that are non-zero
+    'feedbackIdentityInteraction', # feedbackDensity * identityStrength
+    'informedAbsenceCount',        # Number of zero-valued feedback dimensions where ca > 0
+    'informedAbsenceIntensity',    # informedAbsenceCount * log1p(countAccepted) — scales with history depth
 ] + DERIVED_FEATURES_IDENTITY_SHARED
 
 # Derived features for Identity-Only model (no feedback-based features)
@@ -285,6 +305,11 @@ def compute_derived_features_feedback_identity(df: pd.DataFrame) -> pd.DataFrame
     """
     df = df.copy()
 
+    # 0. Clip features with perfect separation at zero (prevent cliff effects)
+    for col in CLIP_AT_ZERO_FEATURES:
+        if col in df.columns:
+            df[col] = df[col].clip(lower=0)
+
     # 1. Acceptance Rate Lower Bound (Wilson score)
     df['acceptanceRateLowerBound'] = df.apply(
         lambda row: wilson_lower_bound(
@@ -330,6 +355,17 @@ def compute_derived_features_feedback_identity(df: pd.DataFrame) -> pd.DataFrame
         'feedbackScoreOrganization', 'feedbackScoreTargetAuthorName', 'feedbackScoreYear'
     ]
     df['feedbackDensity'] = (df[feedback_score_cols] != 0).sum(axis=1) / len(feedback_score_cols)
+
+    # 6. Feedback-Identity Interaction
+    df['feedbackIdentityInteraction'] = df['feedbackDensity'] * df['identityStrength']
+
+    # 7. Informed Absence Count: zero-valued feedback dimensions for established researchers
+    ca = df['countAccepted'].fillna(0)
+    zero_count = (df[feedback_score_cols] == 0).sum(axis=1)
+    df['informedAbsenceCount'] = np.where(ca > 0, zero_count, 0).astype(float)
+
+    # 8. Informed Absence Intensity: scales absence count by researcher history depth
+    df['informedAbsenceIntensity'] = df['informedAbsenceCount'] * np.log1p(ca)
 
     return df
 
