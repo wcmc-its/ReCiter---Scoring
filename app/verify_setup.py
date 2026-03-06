@@ -207,7 +207,7 @@ def file_exists_in_s3(bucket_name, scoringDataFile):
         }
 
 
-def main(modelName,scoringDataFile,bucket_name,useS3Bucket,models):
+def main(modelName,scoringDataFile,bucket_name,useS3Bucket,models,identity_models=None):
     
     try:
         try:
@@ -246,13 +246,19 @@ def main(modelName,scoringDataFile,bucket_name,useS3Bucket,models):
         logging.info(f"\n1. Retrieving models for :{modelName}")
         try:
             if modelName == "feedback":
-                fb_model = models.get("model") 
-                fb_cal = models.get("calibrator") 
-                fb_scaler = models.get("scaler") 
+                fb_model = models.get("model")
+                fb_cal = models.get("calibrator")
+                fb_scaler = models.get("scaler")
+                # Identity-only models for safety net
+                if identity_models:
+                    io_model = identity_models.get("model")
+                    io_cal = identity_models.get("calibrator")
+                    io_scaler = identity_models.get("scaler")
+                    logging.info("Identity-only safety net models loaded")
             else :
-                io_model = models.get("model") 
-                io_cal = models.get("calibrator") 
-                io_scaler = models.get("scaler") 
+                io_model = models.get("model")
+                io_cal = models.get("calibrator")
+                io_scaler = models.get("scaler")
                 logging.info(f"OK -  models retrieved for {modelName}")
         except Exception as e:
             logging.exception(f"Error retrieving models: {e}")
@@ -312,6 +318,17 @@ def main(modelName,scoringDataFile,bucket_name,useS3Bucket,models):
                 df_fb = compute_derived_features_feedback_identity(df_fb)
                 logging.info(f"   OK - {len(FEEDBACK_IDENTITY_FEATURES)} features prepared")
 
+                # Also preprocess for identity-only safety net
+                if identity_models:
+                    logging.info("   Preprocessing for identity-only safety net...")
+                    df_io = df.copy()
+                    for feat in IDENTITY_ONLY_BASE_FEATURES:
+                        if feat not in df_io.columns:
+                            df_io[feat] = 0
+                        df_io[feat] = df_io[feat].fillna(0)
+                    df_io = compute_derived_features_identity_only(df_io)
+                    logging.info(f"   OK - {len(IDENTITY_ONLY_FEATURES)} identity-only features prepared")
+
             elif modelName =="identity" :
                 logging.info("\n5. Preprocessing for Identity-Only model...")
                 df_io = df.copy()
@@ -344,6 +361,20 @@ def main(modelName,scoringDataFile,bucket_name,useS3Bucket,models):
                 raw_fb = fb_model.predict_proba(X_fb)[:, 1]
                 cal_fb = fb_cal.predict(raw_fb.reshape(-1, 1))
                 score_fb = cal_fb * 100
+
+                # Identity-only safety net: cap feedback score at io_score * 33
+                # Prevents feedback features from overriding strong identity-based rejection
+                if identity_models:
+                    X_io = io_scaler.transform(df_io[IDENTITY_ONLY_FEATURES].values)
+                    raw_io = io_model.predict_proba(X_io)[:, 1]
+                    cal_io = io_cal.predict(raw_io)
+                    score_io = cal_io * 100
+                    score_cap = score_io * 33
+                    n_capped = int(np.sum(score_fb > score_cap))
+                    if n_capped > 0:
+                        logging.info(f"   Safety net: capping {n_capped} articles where fb > io*33")
+                    score_fb = np.minimum(score_fb, score_cap)
+
                 # Prepare the output
                 # Make a dictionary for each row
                 scoring_output = [

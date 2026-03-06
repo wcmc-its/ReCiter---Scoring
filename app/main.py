@@ -88,8 +88,11 @@ def lambda_handler(event, context):
                 "error": "Invalid inputDateFileName"
             }
 
-        # Proceed after successful validation    
-        result = run_main(modelName,scoringDataFile,bucket_name,useS3Bucket,models)
+        # When running feedback model, also pass identity-only models for safety net
+        identity_models = cached_models.get("identity") if modelName == "feedback" else None
+
+        # Proceed after successful validation
+        result = run_main(modelName,scoringDataFile,bucket_name,useS3Bucket,models,identity_models)
         logging.info(f"result************:{result}")
         returnCode = result.get("returnCode")
         predictionScores = result.get("predictionScores")
