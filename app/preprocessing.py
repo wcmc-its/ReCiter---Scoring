@@ -135,6 +135,7 @@ DERIVED_FEATURES_IDENTITY_SHARED = [
     'worstSingleEvidence',         # Min of key identity features — no damning evidence against
     'nameQualityMin',              # Min of first/last/middle name scores — all name parts match
     'firstNameFrequencyScore',     # IDF-like score: rare names → high, common names → low (person-level)
+    'nameGenderConflict',          # |nameFirst| * |min(0,genderDiscrepancy)| when both negative — wrong name + wrong gender
 ]
 
 # Derived features for Feedback+Identity model (uses feedback counts)
@@ -146,6 +147,7 @@ DERIVED_FEATURES_FEEDBACK = [
     'feedbackIdentityInteraction', # feedbackDensity * identityStrength
     'informedAbsenceCount',        # Number of zero-valued feedback dimensions where ca > 0
     'informedAbsenceIntensity',    # informedAbsenceCount * log1p(countAccepted) — scales with history depth
+    'nameConflictConfirmed',       # |nameFirst| * |min(0,targetAuthorName)| when both negative — identity + feedback agree name is wrong
 ] + DERIVED_FEATURES_IDENTITY_SHARED
 
 # Derived features for Identity-Only model (no feedback-based features)
@@ -288,6 +290,15 @@ def _compute_identity_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df['firstNameFrequencyScore'] = 0.0
 
+    # 7. nameGenderConflict: wrong first name AND wrong gender.
+    #    Near-certain signal of different person (e.g., female identity "Evelyn"
+    #    matched to male article author "Edward"). Uses only identity features,
+    #    so available in both feedback and identity-only models.
+    nf_shared = df['nameMatchFirstScore']
+    gd_shared = df['genderScoreIdentityArticleDiscrepancy']
+    name_gender_both = (nf_shared < -2.0) & (gd_shared < 0)
+    df['nameGenderConflict'] = np.where(name_gender_both, nf_shared.abs() * gd_shared.clip(upper=0).abs(), 0.0)
+
     return df
 
 
@@ -366,6 +377,15 @@ def compute_derived_features_feedback_identity(df: pd.DataFrame) -> pd.DataFrame
 
     # 8. Informed Absence Intensity: scales absence count by researcher history depth
     df['informedAbsenceIntensity'] = df['informedAbsenceCount'] * np.log1p(ca)
+
+    # 9. Name Conflict Confirmed: identity name matching AND feedback name pattern
+    #    both agree the first name is wrong. Strong signal of different person.
+    #    Zero when either feature is non-negative (i.e., no conflict or only one signal).
+    #    Feedback-only feature (uses feedbackScoreTargetAuthorName).
+    nf = df['nameMatchFirstScore']
+    ta = df['feedbackScoreTargetAuthorName']
+    both_negative = (nf < -2.0) & (ta < 0)
+    df['nameConflictConfirmed'] = np.where(both_negative, nf.abs() * ta.clip(upper=0).abs(), 0.0)
 
     return df
 
