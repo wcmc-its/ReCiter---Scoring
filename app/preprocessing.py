@@ -96,12 +96,13 @@ def _name_frequency_score(first_name):
 # FEATURE COLUMN DEFINITIONS
 # =============================================================================
 
-# Feedback + Identity model: 31 base features
+# Feedback + Identity model: 34 base features
 FEEDBACK_IDENTITY_BASE_FEATURES = [
-    # 12 feedback score features (per-person learned patterns)
+    # 14 feedback score features (per-person learned patterns)
     'feedbackScoreCites', 'feedbackScoreCoAuthorName', 'feedbackScoreEmail',
     'feedbackScoreInstitution', 'feedbackScoreJournal', 'feedbackScoreJournalSubField',
-    'feedbackScoreKeyword', 'feedbackScoreOrcid', 'feedbackScoreOrcidCoAuthor',
+    'feedbackScoreKeyword', 'feedbackScoreTextSimilarity', 'feedbackScoreJournalTitleSimilarity',
+    'feedbackScoreOrcid', 'feedbackScoreOrcidCoAuthor',
     'feedbackScoreOrganization', 'feedbackScoreTargetAuthorName', 'feedbackScoreYear',
     # 19 identity/matching features
     'articleCountScore', 'authorCountScore', 'discrepancyDegreeYearScore', 'emailMatchScore',
@@ -358,11 +359,12 @@ def compute_derived_features_feedback_identity(df: pd.DataFrame) -> pd.DataFrame
         confidence_factor
     )
 
-    # 5. Feedback Density (fraction of 12 feedback features that are non-zero)
+    # 5. Feedback Density (fraction of 14 feedback features that are non-zero)
     feedback_score_cols = [
         'feedbackScoreCites', 'feedbackScoreCoAuthorName', 'feedbackScoreEmail',
         'feedbackScoreInstitution', 'feedbackScoreJournal', 'feedbackScoreJournalSubField',
-        'feedbackScoreKeyword', 'feedbackScoreOrcid', 'feedbackScoreOrcidCoAuthor',
+        'feedbackScoreKeyword', 'feedbackScoreTextSimilarity', 'feedbackScoreJournalTitleSimilarity',
+        'feedbackScoreOrcid', 'feedbackScoreOrcidCoAuthor',
         'feedbackScoreOrganization', 'feedbackScoreTargetAuthorName', 'feedbackScoreYear'
     ]
     df['feedbackDensity'] = (df[feedback_score_cols] != 0).sum(axis=1) / len(feedback_score_cols)
