@@ -234,6 +234,12 @@ DERIVED_FEATURES_IDENTITY_SHARED = [
     'forenameLengthRatio',         # len(articleFirst)/max(len(identityFirst),1) — detects PubMed ForeName concatenation
     'firstMiddleCoverage',         # len(identityFirst+identityMiddle)/max(len(articleFirst),1) — ForeName explained
     'nameMatchTypeOrdinal',        # Ordinal encoding of nameMatchFirstType (0-5)
+    'hasEmail',                    # 1 if identity has email data (score != 0), 0 if absent
+    'hasDegreeYear',               # 1 if identity has degree year (score != 0), 0 if absent
+    'hasGrants',                   # 1 if identity has grant data (score != 0), 0 if absent or no match
+    'hasRelationships',            # 1 if identity has known relationships (count > 0), 0 if absent
+    'hasGender',                   # 1 if identity has gender data (score != 0), 0 if absent
+    'hasOrgUnit',                  # 1 if identity has org unit data (score != 0), 0 if absent or no match
 ]
 
 # Derived features for Feedback+Identity model (uses feedback counts)
@@ -487,6 +493,16 @@ def _compute_identity_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
         )
     else:
         df['nameMatchTypeOrdinal'] = 0.0
+
+    # 18-23. Sparse identity indicators.
+    #    Java outputs 0.0 for both "no data on file" and (in some cases) "checked, no match."
+    #    These binary indicators let the model distinguish "data exists" from "absent."
+    df['hasEmail'] = (df['emailMatchScore'] != 0).astype(float)
+    df['hasDegreeYear'] = (df['discrepancyDegreeYearScore'] != 0).astype(float)
+    df['hasGrants'] = (df['grantMatchScore'] != 0).astype(float)
+    df['hasRelationships'] = (df['relationshipIdentityCount'] > 0).astype(float)
+    df['hasGender'] = (df['genderScoreIdentityArticleDiscrepancy'] != 0).astype(float)
+    df['hasOrgUnit'] = (df['organizationalUnitMatchingScore'] != 0).astype(float)
 
     return df
 
