@@ -92,11 +92,98 @@ def _name_frequency_score(first_name):
     return sum(scores) / len(scores)
 
 
+def _first_name_length(first_name):
+    """Return character count of identity first name after normalization.
+
+    For compound names like "Jean-Pierre", returns total string length (12),
+    not token average. Returns 0.0 if name missing or empty.
+    """
+    if not first_name or not isinstance(first_name, str):
+        return 0.0
+    cleaned = first_name.strip().lower().replace('.', '')
+    return float(len(cleaned)) if cleaned else 0.0
+
+
+def _levenshtein_distance(s1: str, s2: str) -> int:
+    """Compute Levenshtein edit distance between two strings. Pure Python."""
+    if len(s1) < len(s2):
+        return _levenshtein_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    prev = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr = [i + 1]
+        for j, c2 in enumerate(s2):
+            curr.append(min(prev[j + 1] + 1, curr[j] + 1, prev[j] + (c1 != c2)))
+        prev = curr
+    return prev[-1]
+
+
+def _jaro_winkler_similarity(s1: str, s2: str, p: float = 0.1) -> float:
+    """Compute Jaro-Winkler similarity between two strings. Pure Python.
+
+    Returns a value in [0, 1] where 1 means identical strings.
+    The prefix bonus weight p is clamped to max 0.25 per the standard.
+    """
+    if s1 == s2:
+        return 1.0
+    len1, len2 = len(s1), len(s2)
+    if len1 == 0 or len2 == 0:
+        return 0.0
+
+    # Match window
+    match_dist = max(len1, len2) // 2 - 1
+    if match_dist < 0:
+        match_dist = 0
+
+    s1_matches = [False] * len1
+    s2_matches = [False] * len2
+    matches = 0
+    transpositions = 0
+
+    for i in range(len1):
+        start = max(0, i - match_dist)
+        end = min(i + match_dist + 1, len2)
+        for j in range(start, end):
+            if s2_matches[j] or s1[i] != s2[j]:
+                continue
+            s1_matches[i] = True
+            s2_matches[j] = True
+            matches += 1
+            break
+
+    if matches == 0:
+        return 0.0
+
+    # Count transpositions
+    k = 0
+    for i in range(len1):
+        if not s1_matches[i]:
+            continue
+        while not s2_matches[k]:
+            k += 1
+        if s1[i] != s2[k]:
+            transpositions += 1
+        k += 1
+
+    jaro = (matches / len1 + matches / len2 + (matches - transpositions / 2) / matches) / 3.0
+
+    # Winkler prefix bonus (up to 4 chars)
+    prefix = 0
+    for i in range(min(4, len1, len2)):
+        if s1[i] == s2[i]:
+            prefix += 1
+        else:
+            break
+
+    return jaro + prefix * min(p, 0.25) * (1.0 - jaro)
+
+
 # =============================================================================
 # FEATURE COLUMN DEFINITIONS
 # =============================================================================
 
-# Feedback + Identity model: 34 base features
+# Feedback + Identity model: 33 base features
 FEEDBACK_IDENTITY_BASE_FEATURES = [
     # 14 feedback score features (per-person learned patterns)
     'feedbackScoreCites', 'feedbackScoreCoAuthorName', 'feedbackScoreEmail',
@@ -137,6 +224,16 @@ DERIVED_FEATURES_IDENTITY_SHARED = [
     'nameQualityMin',              # Min of first/last/middle name scores — all name parts match
     'firstNameFrequencyScore',     # IDF-like score: rare names → high, common names → low (person-level)
     'nameGenderConflict',          # |nameFirst| * |min(0,genderDiscrepancy)| when both negative — wrong name + wrong gender
+    'firstNameLength',             # Character count of identity first name — short names are inherently ambiguous
+    'nameFrequencyMatchInteraction',  # nameMatchFirstScore × firstNameFrequencyScore — rare name match = strong signal
+    'nameLengthMatchInteraction',  # nameMatchFirstScore × log1p(firstNameLength) — long name match = more information
+    'firstMiddleMatchInteraction', # nameMatchFirstScore × nameMatchMiddleScore — amplifies concordant, dampens discordant
+    'nameMatchMiddleAgreement',    # sign(first) × sign(middle) — clean +1/-1/0 concordance indicator
+    'nameJaroWinkler',             # Jaro-Winkler similarity between identity and article first names (0-1)
+    'nameEditDistanceNorm',        # 1 - levenshtein/max(len) — continuous 0-1 similarity
+    'forenameLengthRatio',         # len(articleFirst)/max(len(identityFirst),1) — detects PubMed ForeName concatenation
+    'firstMiddleCoverage',         # len(identityFirst+identityMiddle)/max(len(articleFirst),1) — ForeName explained
+    'nameMatchTypeOrdinal',        # Ordinal encoding of nameMatchFirstType (0-5)
 ]
 
 # Derived features for Feedback+Identity model (uses feedback counts)
@@ -241,7 +338,7 @@ _WORST_EVIDENCE_FEATURES = [
 
 def _compute_identity_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Compute the 5 engineered identity features shared by both models.
+    Compute engineered identity features shared by both models.
 
     These features synthesize raw identity signals into higher-level concepts:
     - netEvidenceCount: breadth of supporting vs contradicting evidence
@@ -299,6 +396,97 @@ def _compute_identity_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     gd_shared = df['genderScoreIdentityArticleDiscrepancy']
     name_gender_both = (nf_shared < -2.0) & (gd_shared < 0)
     df['nameGenderConflict'] = np.where(name_gender_both, nf_shared.abs() * gd_shared.clip(upper=0).abs(), 0.0)
+
+    # 8. firstNameLength: raw character count of identity first name.
+    #    Short names (2-3 chars) are inherently ambiguous — "Yi" matching "Yin"
+    #    is weak evidence compared to "Christopher" matching "Christophe".
+    if 'identityFirstName' in df.columns:
+        df['firstNameLength'] = df['identityFirstName'].map(_first_name_length)
+    else:
+        df['firstNameLength'] = 0.0
+
+    # 9. nameFrequencyMatchInteraction: match score weighted by name rarity.
+    #    Rare name match = strong signal; common name match = weak signal.
+    df['nameFrequencyMatchInteraction'] = (
+        df['nameMatchFirstScore'] * df['firstNameFrequencyScore']
+    )
+
+    # 10. nameLengthMatchInteraction: match score weighted by name length.
+    #     Long name match = more information; short name match = less.
+    df['nameLengthMatchInteraction'] = (
+        df['nameMatchFirstScore'] * np.log1p(df['firstNameLength'])
+    )
+
+    # 11. firstMiddleMatchInteraction: first × middle name score product.
+    #     Amplifies concordant signals (both positive or both negative),
+    #     dampens discordant ones (one positive, one negative).
+    #     Captures the 75pp acceptance rate spread within the 1.852 bucket.
+    df['firstMiddleMatchInteraction'] = (
+        df['nameMatchFirstScore'] * df['nameMatchMiddleScore']
+    )
+
+    # 12. nameMatchMiddleAgreement: sign concordance indicator.
+    #     +1 when first and middle scores agree in sign, -1 when they disagree,
+    #     0 when either is zero. Clean split point for XGBoost.
+    df['nameMatchMiddleAgreement'] = (
+        np.sign(df['nameMatchFirstScore']) * np.sign(df['nameMatchMiddleScore'])
+    )
+
+    # --- Phase B: Continuous name similarity features ---
+    # These require new Java-exported fields (articleAuthorFirstName, identityMiddleName,
+    # nameMatchFirstType). All default to 0.0 when fields are absent (backward compatible).
+
+    has_article_first = 'articleAuthorFirstName' in df.columns
+    has_identity_middle = 'identityMiddleName' in df.columns
+    has_match_type = 'nameMatchFirstType' in df.columns
+
+    if has_article_first and 'identityFirstName' in df.columns:
+        # Normalize names for comparison
+        id_first = df['identityFirstName'].fillna('').astype(str).str.strip().str.lower()
+        art_first = df['articleAuthorFirstName'].fillna('').astype(str).str.strip().str.lower()
+
+        # 13. nameJaroWinkler: Jaro-Winkler similarity between identity and article first names
+        df['nameJaroWinkler'] = [
+            _jaro_winkler_similarity(a, b) for a, b in zip(id_first, art_first)
+        ]
+
+        # 14. nameEditDistanceNorm: normalized edit distance similarity
+        df['nameEditDistanceNorm'] = [
+            1.0 - _levenshtein_distance(a, b) / max(len(a), len(b), 1)
+            for a, b in zip(id_first, art_first)
+        ]
+
+        # 15. forenameLengthRatio: article first name length / identity first name length
+        id_len = id_first.str.len().clip(lower=1)
+        art_len = art_first.str.len()
+        df['forenameLengthRatio'] = art_len / id_len
+    else:
+        df['nameJaroWinkler'] = 0.0
+        df['nameEditDistanceNorm'] = 0.0
+        df['forenameLengthRatio'] = 0.0
+
+    # 16. firstMiddleCoverage: how much of PubMed ForeName is explained by identity first+middle
+    if has_article_first and 'identityFirstName' in df.columns and has_identity_middle:
+        id_first = df['identityFirstName'].fillna('').astype(str).str.strip().str.lower()
+        id_middle = df['identityMiddleName'].fillna('').astype(str).str.strip().str.lower()
+        art_first = df['articleAuthorFirstName'].fillna('').astype(str).str.strip().str.lower()
+        combined_len = id_first.str.len() + id_middle.str.len()
+        art_len = art_first.str.len().clip(lower=1)
+        df['firstMiddleCoverage'] = combined_len / art_len
+    else:
+        df['firstMiddleCoverage'] = 0.0
+
+    # 17. nameMatchTypeOrdinal: ordinal encoding of nameMatchFirstType
+    if has_match_type:
+        _MATCH_TYPE_MAP = {
+            'full-exact': 5, 'inferredInitials-exact': 4, 'full-fuzzy': 3,
+            'noMatch': 2, 'conflictingAllButInitials': 1, 'conflictingEntirely': 0,
+        }
+        df['nameMatchTypeOrdinal'] = (
+            df['nameMatchFirstType'].fillna('').astype(str).map(_MATCH_TYPE_MAP).fillna(2.0)
+        )
+    else:
+        df['nameMatchTypeOrdinal'] = 0.0
 
     return df
 
@@ -499,6 +687,9 @@ def preprocess_identity_only(df: pd.DataFrame) -> pd.DataFrame:
 def preprocess_for_inference_feedback_identity(df: pd.DataFrame) -> pd.DataFrame:
     """Preprocess for inference (no userAssertion/label required)."""
     df = df.copy()
+    for col in FEEDBACK_IDENTITY_BASE_FEATURES:
+        if col not in df.columns:
+            df[col] = 0.0
     df[FEEDBACK_IDENTITY_BASE_FEATURES] = df[FEEDBACK_IDENTITY_BASE_FEATURES].fillna(0)
     df = compute_derived_features_feedback_identity(df)
     return df
@@ -507,6 +698,9 @@ def preprocess_for_inference_feedback_identity(df: pd.DataFrame) -> pd.DataFrame
 def preprocess_for_inference_identity_only(df: pd.DataFrame) -> pd.DataFrame:
     """Preprocess for inference (no userAssertion/label required)."""
     df = df.copy()
+    for col in IDENTITY_ONLY_BASE_FEATURES:
+        if col not in df.columns:
+            df[col] = 0.0
     df[IDENTITY_ONLY_BASE_FEATURES] = df[IDENTITY_ONLY_BASE_FEATURES].fillna(0)
     df = compute_derived_features_identity_only(df)
     return df
