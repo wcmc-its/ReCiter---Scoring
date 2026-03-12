@@ -183,14 +183,15 @@ def _jaro_winkler_similarity(s1: str, s2: str, p: float = 0.1) -> float:
 # FEATURE COLUMN DEFINITIONS
 # =============================================================================
 
-# Feedback + Identity model: 33 base features
+# Feedback + Identity model: 34 base features
 FEEDBACK_IDENTITY_BASE_FEATURES = [
-    # 14 feedback score features (per-person learned patterns)
+    # 15 feedback score features (per-person learned patterns)
     'feedbackScoreCites', 'feedbackScoreCoAuthorName', 'feedbackScoreEmail',
     'feedbackScoreInstitution', 'feedbackScoreJournal', 'feedbackScoreJournalSubField',
     'feedbackScoreKeyword', 'feedbackScoreTextSimilarity', 'feedbackScoreJournalTitleSimilarity',
     'feedbackScoreOrcid', 'feedbackScoreOrcidCoAuthor',
     'feedbackScoreOrganization', 'feedbackScoreTargetAuthorName', 'feedbackScoreYear',
+    'feedbackScoreBibliographicCoupling',
     # 19 identity/matching features
     'articleCountScore', 'authorCountScore', 'discrepancyDegreeYearScore', 'emailMatchScore',
     'genderScoreIdentityArticleDiscrepancy', 'grantMatchScore', 'journalSubfieldScore',
@@ -247,7 +248,7 @@ DERIVED_FEATURES_FEEDBACK = [
     'acceptanceRateLowerBound',   # Wilson score interval LB - confidence-adjusted
     'feedbackConfidence',          # How much feedback data we have (log-scaled)
     'uncertainRejectionRisk',      # Continuous risk score for uncertain high-rejection cases
-    'feedbackDensity',             # Fraction of 12 feedback features that are non-zero
+    'feedbackDensity',             # Fraction of 15 feedback features that are non-zero
     'feedbackIdentityInteraction', # feedbackDensity * identityStrength
     'informedAbsenceCount',        # Number of zero-valued feedback dimensions where ca > 0
     'informedAbsenceIntensity',    # informedAbsenceCount * log1p(countAccepted) — scales with history depth
@@ -563,13 +564,14 @@ def compute_derived_features_feedback_identity(df: pd.DataFrame) -> pd.DataFrame
         confidence_factor
     )
 
-    # 5. Feedback Density (fraction of 14 feedback features that are non-zero)
+    # 5. Feedback Density (fraction of 15 feedback features that are non-zero)
     feedback_score_cols = [
         'feedbackScoreCites', 'feedbackScoreCoAuthorName', 'feedbackScoreEmail',
         'feedbackScoreInstitution', 'feedbackScoreJournal', 'feedbackScoreJournalSubField',
         'feedbackScoreKeyword', 'feedbackScoreTextSimilarity', 'feedbackScoreJournalTitleSimilarity',
         'feedbackScoreOrcid', 'feedbackScoreOrcidCoAuthor',
-        'feedbackScoreOrganization', 'feedbackScoreTargetAuthorName', 'feedbackScoreYear'
+        'feedbackScoreOrganization', 'feedbackScoreTargetAuthorName', 'feedbackScoreYear',
+        'feedbackScoreBibliographicCoupling'
     ]
     df['feedbackDensity'] = (df[feedback_score_cols] != 0).sum(axis=1) / len(feedback_score_cols)
 
