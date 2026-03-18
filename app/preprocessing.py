@@ -60,7 +60,10 @@ _log = logging.getLogger(__name__)
 def _load_name_frequency():
     """Load name frequency table from data/name_frequency.json.
     Returns (table_dict, median_score) or ({}, 0.0) if unavailable."""
-    freq_path = Path(__file__).parent.parent / 'data' / 'name_frequency.json'
+    # Container path first (/var/task/data/), then local dev path (../data/)
+    freq_path = Path(__file__).parent / 'data' / 'name_frequency.json'
+    if not freq_path.exists():
+        freq_path = Path(__file__).parent.parent / 'data' / 'name_frequency.json'
     if freq_path.exists():
         with open(freq_path, 'r') as f:
             table = json.load(f)

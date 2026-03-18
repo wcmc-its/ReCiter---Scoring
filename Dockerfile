@@ -26,6 +26,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY app/ /var/task
 
+# Copy name frequency data (used by preprocessing.py for firstNameFrequencyScore)
+COPY data/name_frequency.json /var/task/data/name_frequency.json
+
 # Set the Lambda function handler
 CMD ["main.lambda_handler"]
 
