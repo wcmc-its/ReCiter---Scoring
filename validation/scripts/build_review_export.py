@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Build per-article review exports for the 6 UC-system institutions.
+"""Build per-article review exports for the external-validation institutions.
 
 For each institution, joins the scored articles (pmid, score, userAssertion)
 against PubMed article metadata (title, journal, pub date, DOI) fetched from
 NCBI esummary, and writes a reviewer-facing CSV. Also emits a single combined
-.xlsx workbook (one sheet per institution) as the email deliverable.
+.xlsx workbook, one sheet per institution.
 
-Mirrors external_validation/results/fredhutch/fredhutch_all_articles_for_review.csv,
-minus the target_author / target_orcid columns (no ORCID inference run for UC).
+Covers the six UC-system institutions and Fred Hutchinson Cancer Center. Each
+row carries a plain-English suggested_action and a compact flag for filtering.
 
 Output:
-  external_validation/results/<inst>/<inst>_all_articles_for_review.csv  (6 files)
-  external_validation/uc_system/uc_articles_for_review.xlsx              (6 sheets)
+  external_validation/results/<inst>/<inst>_all_articles_for_review.csv
+  external_validation/articles_for_review.xlsx              (one sheet / inst)
 """
 import csv
 import json
@@ -26,15 +26,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ESUMMARY = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi'
 API_KEY = os.environ.get('PUBMED_API_KEY', '')
-META_CACHE = '/tmp/uc_article_meta.json'
+META_CACHE = '/tmp/validation_article_meta.json'
 
+# Each entry: (slug, display label). The slug keys the data CSV
+# (data/<slug>_data.csv) and the score file (results/<slug>/<slug>_scores_all.json).
 INSTITUTIONS = [
-    ('uci',     'UC Irvine'),
-    ('ucla',    'UCLA'),
-    ('usc',     'USC'),
-    ('ucsd',    'UC San Diego'),
-    ('ucdavis', 'UC Davis'),
-    ('ucsf',    'UCSF'),
+    ('uci',       'UC Irvine'),
+    ('ucla',      'UCLA'),
+    ('usc',       'USC'),
+    ('ucsd',      'UC San Diego'),
+    ('ucdavis',   'UC Davis'),
+    ('ucsf',      'UCSF'),
+    ('fredhutch', 'Fred Hutchinson'),
 ]
 COLUMNS = ['institution', 'person_id', 'name', 'pmid', 'score', 'assertion',
            'suggested_action', 'flag',
@@ -186,11 +189,18 @@ def build_rows(slug, label, meta, names):
 def main():
     all_pmids = set()
     scored = {}
+    available = []
     for slug, label in INSTITUTIONS:
+        score_file = ROOT / f'external_validation/results/{slug}/{slug}_scores_all.json'
+        if not score_file.exists():
+            print(f'  skip {label}: no {score_file.name} yet')
+            continue
         rows = load_scores(slug)
         scored[slug] = rows
+        available.append((slug, label))
         all_pmids.update(p for _, p, _, _ in rows)
-    print(f'Total article-rows: {sum(len(v) for v in scored.values()):,}; '
+    print(f'Institutions: {len(available)}; '
+          f'total article-rows: {sum(len(v) for v in scored.values()):,}; '
           f'unique PMIDs: {len(all_pmids):,}')
 
     print('Fetching PubMed metadata (NCBI esummary) ...')
@@ -204,7 +214,7 @@ def main():
         wb = None
 
     grand = 0
-    for slug, label in INSTITUTIONS:
+    for slug, label in available:
         rows = build_rows(slug, label, meta, load_names(slug))
         grand += len(rows)
         csv_path = ROOT / f'external_validation/results/{slug}/{slug}_all_articles_for_review.csv'
@@ -215,7 +225,7 @@ def main():
         flagged = sum(1 for r in rows if r['flag'])
         new_hc = sum(1 for r in rows if r['flag'] in ('NEW_HIGH_CONF', 'NEW_PROBABLE'))
         size_mb = csv_path.stat().st_size / 1e6
-        print(f'  {label:14s} {len(rows):>7,} rows  {flagged:>6,} flagged  '
+        print(f'  {label:16s} {len(rows):>7,} rows  {flagged:>6,} flagged  '
               f'{new_hc:>6,} new >=95  {size_mb:5.1f} MB')
         if wb is not None:
             ws = wb.create_sheet(title=label[:31])
@@ -224,7 +234,7 @@ def main():
                 ws.append([r[c] for c in COLUMNS])
 
     if wb is not None:
-        xlsx_path = ROOT / 'external_validation/uc_system/uc_articles_for_review.xlsx'
+        xlsx_path = ROOT / 'external_validation/articles_for_review.xlsx'
         wb.save(xlsx_path)
         size_mb = xlsx_path.stat().st_size / 1e6
         print(f'\nCombined workbook: {grand:,} rows, {size_mb:.1f} MB '
