@@ -1,0 +1,10 @@
+{
+  "strategy.email.default.suffixes": "@usc.edu,@med.usc.edu,@chla.usc.edu,@chan.usc.edu,@loni.usc.edu,@marshall.usc.edu",
+  "strategy.authorAffiliationScoringStrategy.homeInstitution-keywords": "southern|california, keck|medicine, keck|usc, keck|school, alfred|e.|mann, norris|comprehensive|cancer, leonard|davis|gerontology, doheny|eye, roski|eye, ostrow|dentistry, saban|research, schaeffer|center, mark|stevens|neuroimaging, stevens|neuroimaging, viterbi, dornsife, marshall|school|business, gould|school|law, annenberg|communication, rossier|education, thornton|music, suzanne|dworak-peck|social, @usc.edu, @med.usc.edu",
+  "strategy.authorAffiliationScoringStrategy.homeInstitution-label": "University of Southern California",
+  "strategy.authorAffiliationScoringStrategy.collaboratingInstitutions-keywords": "harvard|medical|school",
+  "searchStrategy-lenient-threshold": "10000",
+  "searchStrategy-strict-threshold": "2000",
+  "use.scopus.articles": "false",
+  "strategy.scopus.common.affiliation": "false"
+}
