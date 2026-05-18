@@ -1,0 +1,13 @@
+# ReCiter external-validation harness — Python dependencies.
+#
+# Scoring-fidelity pins (XGBoost 3.2.0, scikit-learn, joblib, ...) are inherited
+# from the scoring Lambda's requirements so the harness scores identically to
+# production. Do not override them.
+-r ../requirements.txt
+
+# Harness-only additions (analysis, figures, local scoring service):
+numpy>=1.26
+scipy>=1.11
+matplotlib>=3.8
+flask>=3.0
+openpyxl>=3.1

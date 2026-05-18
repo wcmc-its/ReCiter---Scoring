@@ -1,0 +1,8 @@
+{
+  "strategy.email.default.suffixes": "@fredhutch.org,@rockefeller.edu,@embl.de",
+  "strategy.authorAffiliationScoringStrategy.homeInstitution-keywords": "fred|hutchinson|cancer, university|washington, public|sciences|division, clinical|division, fred|hutchinson|cancer, washington|medicine, fred|hutch|cancer, howard|hughes, school|public|health, cancer|prevention|program, @fredhutch.org",
+  "strategy.authorAffiliationScoringStrategy.homeInstitution-label": "Fred Hutchinson Cancer Center",
+  "strategy.authorAffiliationScoringStrategy.collaboratingInstitutions-keywords": "university|washington, clinical|division, public|sciences|division, national|institutes|health, california|san|francisco, allergy|infectious|diseases, southern|california, school|public|health, washington|medicine, harvard|t.h.|chan",
+  "use.scopus.articles": "false",
+  "strategy.scopus.common.affiliation": "false"
+}

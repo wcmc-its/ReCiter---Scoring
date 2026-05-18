@@ -1,0 +1,10 @@
+{
+  "strategy.email.default.suffixes": "@ucla.edu,@mednet.ucla.edu,@g.ucla.edu,@sonnet.ucla.edu,@psych.ucla.edu,@jsei.ucla.edu,@seas.ucla.edu,@dentistry.ucla.edu,@luskin.ucla.edu,@ph.ucla.edu,@chem.ucla.edu,@physics.ucla.edu,@atmos.ucla.edu,@soc.ucla.edu,@epss.ucla.edu,@humnet.ucla.edu,@cs.ucla.edu,@ee.ucla.edu,@mbi.ucla.edu,@engineering.ucla.edu,@geog.ucla.edu,@biology.ucla.edu,@alumni.ucla.edu",
+  "strategy.authorAffiliationScoringStrategy.homeInstitution-keywords": "ucla, california|los|angeles, california-los|angeles, david|geffen, fielding|public, jonsson|comprehensive, va|greater|los, semel|neuroscience, california|nanosystems, stein|eye, weintraub, brain|research|institute, @ucla.edu",
+  "strategy.authorAffiliationScoringStrategy.homeInstitution-label": "University of California, Los Angeles",
+  "strategy.authorAffiliationScoringStrategy.collaboratingInstitutions-keywords": "harvard|medical|school",
+  "searchStrategy-lenient-threshold": "10000",
+  "searchStrategy-strict-threshold": "2000",
+  "use.scopus.articles": "false",
+  "strategy.scopus.common.affiliation": "false"
+}
