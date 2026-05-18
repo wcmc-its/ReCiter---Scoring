@@ -63,15 +63,17 @@ Scoring every article is only step one. The harness then computes three things:
   +---------------+   +-------------------------+
 ```
 
-1. **Prepare** — `build_uc_validation_data.py` turns a curator's spreadsheet
-   into one CSV per institution (`PersonID, name, PMID, Assertion`).
+1. **Prepare** — a per-institution data builder turns a curator's spreadsheet
+   into one CSV per institution (`PersonID, name, PMID, Assertion`):
+   `build_uc_validation_data.py` for the UC-system sites,
+   `build_fredhutch_data.py` for Fred Hutch.
 2. **Score** — `run_uc_validation_all.sh` (or `run_external_validation.py` for
    a single institution) runs every researcher through ReCiter and records each
    article's 0–100 score.
 3. **Evaluate** — `run_external_validation.py --evaluate-only` and
    `aggregate_uc_evaluation.py` compute AUC, calibration, and review burden,
    per institution and pooled.
-4. **Export for review** — `build_uc_review_export.py` writes a per-article
+4. **Export for review** — `build_review_export.py` writes a per-article
    spreadsheet a curator can act on, each row tagged with a plain-English
    suggested action (e.g. "Add: very likely missing").
 
@@ -144,8 +146,9 @@ export PUBMED_DIR=/path/to/ReCiter-PubMed-Retrieval-Tool
 Researcher data is **not included** — it is identifiable and gitignored. Each
 institution needs a CSV at `external_validation/uc_system/data/<inst>_data.csv`
 with columns: `PersonID, FirstName, MiddleName, LastName, PMID, Assertion`
-(`Assertion` is `ACCEPTED` or `REJECTED`). `build_uc_validation_data.py` derives
-these from a source spreadsheet.
+(`Assertion` is `ACCEPTED` or `REJECTED`). `build_uc_validation_data.py` (UC
+system) and `build_fredhutch_data.py` (Fred Hutch) derive these from a source
+spreadsheet.
 
 ## Reproduce a run
 
@@ -168,7 +171,7 @@ scripts/run_external_validation.py \
 scripts/run_external_validation.py --institution <inst> ... --evaluate-only
 scripts/aggregate_uc_evaluation.py        # cross-institution metrics
 scripts/recency_matched_evaluation.py     # recency-matched re-evaluation
-scripts/build_uc_review_export.py         # per-article reviewer CSV/workbook
+scripts/build_review_export.py            # per-article reviewer CSV/workbook
 ```
 
 `run_external_validation.py --help` documents every flag.

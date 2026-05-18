@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Build per-article review exports for the 6 UC-system institutions.
+"""Build per-article review exports for the external-validation institutions.
 
 For each institution, joins the scored articles (pmid, score, userAssertion)
 against PubMed article metadata (title, journal, pub date, DOI) fetched from
 NCBI esummary, and writes a reviewer-facing CSV. Also emits a single combined
-.xlsx workbook (one sheet per institution) as the email deliverable.
+.xlsx workbook per group — the UC system and Fred Hutch are kept in separate
+files so each deliverable can be shared with only its own institutions.
 
-Mirrors external_validation/results/fredhutch/fredhutch_all_articles_for_review.csv,
-minus the target_author / target_orcid columns (no ORCID inference run for UC).
+Covers the six UC-system institutions and Fred Hutchinson Cancer Center. Each
+row carries a plain-English suggested_action and a compact flag for filtering.
 
 Output:
-  external_validation/results/<inst>/<inst>_all_articles_for_review.csv  (6 files)
-  external_validation/uc_system/uc_articles_for_review.xlsx              (6 sheets)
+  external_validation/results/<inst>/<inst>_all_articles_for_review.csv
+  external_validation/uc_articles_for_review.xlsx          (6 UC sheets)
+  external_validation/fredhutch_articles_for_review.xlsx   (1 sheet)
 """
 import csv
 import json
@@ -26,15 +28,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ESUMMARY = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi'
 API_KEY = os.environ.get('PUBMED_API_KEY', '')
-META_CACHE = '/tmp/uc_article_meta.json'
+META_CACHE = '/tmp/validation_article_meta.json'
 
+# Each entry: (slug, display label, workbook group). The slug keys the data CSV
+# (data/<slug>_data.csv) and the score file (results/<slug>/<slug>_scores_all.json).
+# The group decides which workbook the institution's sheet lands in, keeping the
+# UC-system and Fred Hutch deliverables in separate files.
 INSTITUTIONS = [
-    ('uci',     'UC Irvine'),
-    ('ucla',    'UCLA'),
-    ('usc',     'USC'),
-    ('ucsd',    'UC San Diego'),
-    ('ucdavis', 'UC Davis'),
-    ('ucsf',    'UCSF'),
+    ('uci',       'UC Irvine',       'uc'),
+    ('ucla',      'UCLA',            'uc'),
+    ('usc',       'USC',             'uc'),
+    ('ucsd',      'UC San Diego',    'uc'),
+    ('ucdavis',   'UC Davis',        'uc'),
+    ('ucsf',      'UCSF',            'uc'),
+    ('fredhutch', 'Fred Hutchinson', 'fredhutch'),
 ]
 COLUMNS = ['institution', 'person_id', 'name', 'pmid', 'score', 'assertion',
            'suggested_action', 'flag',
@@ -186,11 +193,18 @@ def build_rows(slug, label, meta, names):
 def main():
     all_pmids = set()
     scored = {}
-    for slug, label in INSTITUTIONS:
+    available = []
+    for slug, label, group in INSTITUTIONS:
+        score_file = ROOT / f'external_validation/results/{slug}/{slug}_scores_all.json'
+        if not score_file.exists():
+            print(f'  skip {label}: no {score_file.name} yet')
+            continue
         rows = load_scores(slug)
         scored[slug] = rows
+        available.append((slug, label, group))
         all_pmids.update(p for _, p, _, _ in rows)
-    print(f'Total article-rows: {sum(len(v) for v in scored.values()):,}; '
+    print(f'Institutions: {len(available)}; '
+          f'total article-rows: {sum(len(v) for v in scored.values()):,}; '
           f'unique PMIDs: {len(all_pmids):,}')
 
     print('Fetching PubMed metadata (NCBI esummary) ...')
@@ -198,15 +212,12 @@ def main():
 
     try:
         import openpyxl
-        wb = openpyxl.Workbook()
-        wb.remove(wb.active)
     except ImportError:
-        wb = None
+        openpyxl = None
+    workbooks = {}   # group -> openpyxl.Workbook
 
-    grand = 0
-    for slug, label in INSTITUTIONS:
+    for slug, label, group in available:
         rows = build_rows(slug, label, meta, load_names(slug))
-        grand += len(rows)
         csv_path = ROOT / f'external_validation/results/{slug}/{slug}_all_articles_for_review.csv'
         with open(csv_path, 'w', newline='') as f:
             w = csv.DictWriter(f, fieldnames=COLUMNS)
@@ -215,20 +226,28 @@ def main():
         flagged = sum(1 for r in rows if r['flag'])
         new_hc = sum(1 for r in rows if r['flag'] in ('NEW_HIGH_CONF', 'NEW_PROBABLE'))
         size_mb = csv_path.stat().st_size / 1e6
-        print(f'  {label:14s} {len(rows):>7,} rows  {flagged:>6,} flagged  '
+        print(f'  {label:16s} {len(rows):>7,} rows  {flagged:>6,} flagged  '
               f'{new_hc:>6,} new >=95  {size_mb:5.1f} MB')
-        if wb is not None:
+        if openpyxl is not None:
+            wb = workbooks.get(group)
+            if wb is None:
+                wb = openpyxl.Workbook()
+                wb.remove(wb.active)
+                workbooks[group] = wb
             ws = wb.create_sheet(title=label[:31])
             ws.append(COLUMNS)
             for r in rows:
                 ws.append([r[c] for c in COLUMNS])
 
-    if wb is not None:
-        xlsx_path = ROOT / 'external_validation/uc_system/uc_articles_for_review.xlsx'
+    # One workbook per group — UC system and Fred Hutch stay in separate files
+    # so each can be shared with only its own institutions.
+    for group, wb in workbooks.items():
+        xlsx_path = ROOT / f'external_validation/{group}_articles_for_review.xlsx'
         wb.save(xlsx_path)
+        sheets = len(wb.sheetnames)
         size_mb = xlsx_path.stat().st_size / 1e6
-        print(f'\nCombined workbook: {grand:,} rows, {size_mb:.1f} MB '
-              f'-> {xlsx_path.relative_to(ROOT)}')
+        print(f'  workbook: {xlsx_path.name}  ({sheets} sheet'
+              f'{"s" if sheets != 1 else ""}, {size_mb:.1f} MB)')
 
 
 if __name__ == '__main__':
