@@ -321,6 +321,39 @@ assert len(IDENTITY_ONLY_FEATURES) == 47, \
 DERIVED_FEATURES = DERIVED_FEATURES_FEEDBACK
 
 
+# Ordinal encoding of the nameMatchFirstType diagnostic string Java emits, used to
+# build the nameMatchTypeOrdinal model feature.
+#
+# This turns a STRING into a NUMBER the deployed 72/47-feature models were trained
+# on, so a label Java emits that is missing from this map does not fail loudly -- it
+# silently collapses to MATCH_TYPE_DEFAULT_ORDINAL. Any new nameMatchFirstType value
+# must land here BEFORE the Java side starts emitting it.
+#
+# ReCiter #746 splits full-exact into three honest buckets for first names that only
+# prefixed or suffixed the byline (Shuo vs "Shuofei", 'M.' vs "Mayra", Cary vs
+# "MCary"). They are pinned to the full-exact ordinal on purpose so the relabel moves
+# no feature value; retuning them is a separate, retrain-gated change.
+MATCH_TYPE_DEFAULT_ORDINAL = 2.0
+MATCH_TYPE_ORDINAL = {
+    'full-exact': 5,
+    'full-prefix': 5,              # ReCiter #746
+    'full-suffix': 5,              # ReCiter #746
+    'inferredInitials-prefix': 5,  # ReCiter #746
+    'inferredInitials-exact': 4,
+    'full-fuzzy': 3,
+    'noMatch': 2,
+    'conflictingAllButInitials': 1,
+    'conflictingEntirely': 0,
+}
+
+# Tripwire: the #746 buckets exist to make the LABEL honest, not to change the score.
+# If someone retunes one of them here without retraining, this fails on import.
+assert all(
+    MATCH_TYPE_ORDINAL[k] == MATCH_TYPE_ORDINAL['full-exact']
+    for k in ('full-prefix', 'full-suffix', 'inferredInitials-prefix')
+), "ReCiter #746 buckets must share the full-exact ordinal until the models are retrained"
+
+
 # =============================================================================
 # STATISTICAL FUNCTIONS
 # =============================================================================
@@ -518,14 +551,12 @@ def _compute_identity_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df['firstMiddleCoverage'] = 0.0
 
-    # 17. nameMatchTypeOrdinal
+    # 17. nameMatchTypeOrdinal -- see MATCH_TYPE_ORDINAL for why unmapped labels are
+    # a silent feature change rather than an error.
     if has_match_type:
-        _MATCH_TYPE_MAP = {
-            'full-exact': 5, 'inferredInitials-exact': 4, 'full-fuzzy': 3,
-            'noMatch': 2, 'conflictingAllButInitials': 1, 'conflictingEntirely': 0,
-        }
         df['nameMatchTypeOrdinal'] = (
-            df['nameMatchFirstType'].fillna('').astype(str).map(_MATCH_TYPE_MAP).fillna(2.0)
+            df['nameMatchFirstType'].fillna('').astype(str)
+            .map(MATCH_TYPE_ORDINAL).fillna(MATCH_TYPE_DEFAULT_ORDINAL)
         )
     else:
         df['nameMatchTypeOrdinal'] = 0.0
